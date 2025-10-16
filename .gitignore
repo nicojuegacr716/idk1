@@ -35,3 +35,6 @@ yarn-error.log*
 .coverage
 *.bak
 *.tmp
+worker/worker-tokens.json
+backend/generate_vps/token.json
+backend/frontend/
