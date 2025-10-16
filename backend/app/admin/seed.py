@@ -60,7 +60,7 @@ ROLE_PERMISSION_MAP: Dict[str, Iterable[str]] = {
         "notification:read",
         "notification:update",
     ],
-    "user": ["user:read"],
+    "user": [],
 }
 
 ROLE_DESCRIPTIONS = {

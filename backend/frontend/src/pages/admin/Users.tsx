@@ -437,7 +437,7 @@ export default function Users() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm">{user.email ?? "--"}</TableCell>
+                      <TableCell className="text-sm">{user.email_masked ?? "--"}</TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {user.roles.length === 0 && <Badge variant="outline">none</Badge>}
@@ -448,7 +448,7 @@ export default function Users() {
                           ))}
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm font-mono">{user.discord_id}</TableCell>
+                      <TableCell className="text-sm font-mono">{user.discord_id_suffix ? `****${user.discord_id_suffix}` : "--"}</TableCell>
                       <TableCell className="text-center">
                         <Button
                           variant="ghost"

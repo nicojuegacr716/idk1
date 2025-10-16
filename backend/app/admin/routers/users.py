@@ -1,7 +1,7 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-import json
 from typing import Any
+from pydantic import ValidationError
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.deps import get_db
 from app.models import User
+from app.security.payload import decrypt_payload
 
 from ..audit import AuditContext
 from ..deps import require_perm
@@ -32,27 +33,66 @@ def _audit_context(request: Request, actor: User) -> AuditContext:
     return AuditContext(actor_user_id=actor.id, ip=client_host, ua=user_agent)
 
 
-async def _parse_user_update(request: Request) -> UserUpdate:
-    content_type = request.headers.get("content-type", "")
-    data: dict[str, Any]
+def _validated_secret(request: Request) -> str:
+    token = getattr(request.state, "csrf_token", None)
+    if not token:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Missing CSRF context.")
+    return token
+
+
+async def _read_secure_payload(request: Request) -> dict[str, Any]:
+    content_type = (request.headers.get("content-type") or "").lower()
+    encryption = (request.headers.get("X-Payload-Encrypted") or "").lower()
+    if encryption:
+        if encryption != "aes-gcm":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported payload encryption scheme.",
+            )
+        raw = await request.json()
+        if not isinstance(raw, dict) or "data" not in raw:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Encrypted payload missing data field.")
+        secret = _validated_secret(request)
+        try:
+            decrypted = decrypt_payload(str(raw["data"]), secret)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unable to decrypt payload.") from exc
+        if not isinstance(decrypted, dict):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Decrypted payload is invalid.")
+        return decrypted
     if "application/json" in content_type:
-        body = await request.body()
-        data = json.loads(body.decode("utf-8")) if body else {}
-    else:
-        form = await request.form()
-        data = {key: form.get(key) for key in form.keys()}
+        parsed = await request.json()
+        if parsed is None:
+            return {}
+        if isinstance(parsed, dict):
+            return parsed
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="JSON body must be an object.")
+    form = await request.form()
+    data: dict[str, Any] = {}
+    for key in form.keys():
+        values = form.getlist(key)
+        if len(values) == 1:
+            data[key] = values[0]
+        else:
+            data[key] = values
+    return data
+
+
+async def _parse_user_update(request: Request) -> UserUpdate:
+    data = await _read_secure_payload(request)
     return UserUpdate(**{k: v for k, v in data.items() if v is not None})
 
 
 async def _parse_role_payload(request: Request) -> list[UUID]:
-    content_type = request.headers.get("content-type", "")
-    role_ids: list[UUID] = []
-    if "application/json" in content_type:
-        payload = await request.json()
-        values = payload.get("role_ids", []) if isinstance(payload, dict) else []
+    payload = await _read_secure_payload(request)
+    raw_values = payload.get("role_ids", [])
+    if isinstance(raw_values, str):
+        values = [raw_values]
+    elif isinstance(raw_values, (list, tuple)):
+        values = raw_values
     else:
-        form = await request.form()
-        values = form.getlist("role_ids")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="role_ids must be a list.")
+    role_ids: list[UUID] = []
     for value in values:
         try:
             role_ids.append(UUID(str(value)))
@@ -64,10 +104,14 @@ async def _parse_role_payload(request: Request) -> list[UUID]:
 @router.post("/users", response_model=AdminUser, status_code=status.HTTP_201_CREATED)
 async def create_user(
     request: Request,
-    payload: UserCreate,
     actor: User = Depends(require_perm("user:create")),
     db: Session = Depends(get_db),
 ) -> AdminUser:
+    data = await _read_secure_payload(request)
+    try:
+        payload = UserCreate(**data)
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user payload.") from exc
     context = _audit_context(request, actor)
     return user_service.create_user(db, payload, context)
 
@@ -144,10 +188,14 @@ async def remove_roles(
 async def update_user_coins_endpoint(
     request: Request,
     user_id: UUID,
-    payload: UserCoinsUpdateRequest,
     actor: User = Depends(require_perm("user:coins:update")),
     db: Session = Depends(get_db),
 ) -> AdminUser:
+    data = await _read_secure_payload(request)
+    try:
+        payload = UserCoinsUpdateRequest(**data)
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid coin payload.") from exc
     context = _audit_context(request, actor)
     return user_service.update_user_coins(
         db,

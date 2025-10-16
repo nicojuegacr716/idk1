@@ -58,6 +58,17 @@ class AdminUser(UserSummary):
     roles: list[RoleSummary] = Field(default_factory=list)
 
 
+class AdminUserListItem(BaseModel):
+    id: UUID
+    username: str
+    email_masked: str | None = None
+    display_name: str | None = None
+    avatar_url: str | None = None
+    coins: int
+    discord_id_suffix: str | None = None
+    roles: list[RoleSummary] = Field(default_factory=list)
+
+
 class UserCreate(BaseModel):
     discord_id: str
     username: str
@@ -76,7 +87,7 @@ class UserUpdate(BaseModel):
 
 
 class UserListResponse(BaseModel):
-    items: list[AdminUser]
+    items: list[AdminUserListItem]
     total: int
     page: int
     page_size: int
@@ -332,3 +343,4 @@ class AnnouncementUpdateRequest(BaseModel):
     content: str | None = Field(default=None, min_length=1)
     hero_image_url: str | None = None
     attachments: list[AnnouncementAttachment] | None = None
+

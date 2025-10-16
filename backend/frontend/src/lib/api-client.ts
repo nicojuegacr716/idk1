@@ -26,6 +26,49 @@ const ADMIN_API_PREFIX = "/api/v1/admin";
 const CSRF_SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
 const csrfTokenCache = new Map<string, string>();
 
+const textEncoder = new TextEncoder();
+
+const bufferToHex = (buffer: ArrayBuffer): string =>
+  Array.from(new Uint8Array(buffer))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+
+const bytesToBase64 = (bytes: Uint8Array): string => {
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/u, "");
+};
+
+const bufferToBase64 = (buffer: ArrayBuffer): string => bytesToBase64(new Uint8Array(buffer));
+
+const deriveRequestSignature = async (csrfToken: string, timestamp: string): Promise<string> => {
+  const data = textEncoder.encode(`${csrfToken}:${timestamp}`);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return bufferToHex(digest);
+};
+
+const deriveEncryptionKey = async (csrfToken: string) => {
+  const material = await crypto.subtle.digest("SHA-256", textEncoder.encode(csrfToken));
+  return crypto.subtle.importKey("raw", material, "AES-GCM", false, ["encrypt"]);
+};
+
+const encryptAdminPayload = async (payload: unknown, csrfToken: string): Promise<string> => {
+  const key = await deriveEncryptionKey(csrfToken);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const plaintext = textEncoder.encode(JSON.stringify(payload));
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plaintext);
+  return `${bytesToBase64(iv)}.${bufferToBase64(ciphertext)}`;
+};
+
+const tryParseJson = (value: string): unknown => {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+};
 type AdminForbiddenListener = () => void;
 
 const adminForbiddenListeners = new Set<AdminForbiddenListener>();
@@ -143,24 +186,43 @@ const fetchCsrfToken = async (path: string): Promise<string> => {
 
 const apiFetch = async <T>(path: string, init?: RequestInit & { skipCsrf?: boolean }): Promise<T> => {
   const url = buildUrl(path);
+  const headers = new Headers();
+  headers.set("Accept", "application/json");
+  if (init?.headers) {
+    const initialHeaders = new Headers(init.headers as HeadersInit);
+    initialHeaders.forEach((value, key) => {
+      headers.set(key, value);
+    });
+  }
+
   const config: RequestInit = {
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-      ...(init?.headers ?? {}),
-    },
     ...init,
+    credentials: "include",
+    headers,
   };
 
-  if (!CSRF_SAFE_METHODS.has((config.method ?? "GET").toUpperCase()) && !init?.skipCsrf) {
+  const method = (config.method ?? "GET").toUpperCase();
+  if (!CSRF_SAFE_METHODS.has(method) && !init?.skipCsrf) {
     const csrfPath = normalizeCsrfPath(path);
     const needsAdminCsrf = csrfPath?.startsWith(ADMIN_API_PREFIX) ?? false;
     if (needsAdminCsrf && csrfPath) {
-      const token = await fetchCsrfToken(csrfPath);
-      config.headers = {
-        ...config.headers,
-        "X-CSRF-Token": token,
-      };
+      const csrfToken = await fetchCsrfToken(csrfPath);
+      headers.set("X-CSRF-Token", csrfToken);
+      const timestamp = Date.now().toString();
+      headers.set("X-Request-Timestamp", timestamp);
+      headers.set("X-Request-Signature", await deriveRequestSignature(csrfToken, timestamp));
+
+      const contentType = headers.get("Content-Type") ?? headers.get("content-type");
+      const shouldEncryptPayload = csrfPath.startsWith(`${ADMIN_API_PREFIX}/users`);
+      if (shouldEncryptPayload && contentType?.includes("application/json") && typeof config.body === "string") {
+        const parsedBody = tryParseJson(config.body);
+        if (parsedBody && typeof parsedBody === "object") {
+          headers.set("X-Payload-Encrypted", "aes-gcm");
+          headers.set("Content-Type", "application/json");
+          const encrypted = await encryptAdminPayload(parsedBody, csrfToken);
+          config.body = JSON.stringify({ data: encrypted });
+        }
+      }
     }
   }
 
@@ -667,3 +729,4 @@ export const updateKyaroPrompt = async (prompt: string): Promise<KyaroPrompt> =>
     body,
   });
 };
+

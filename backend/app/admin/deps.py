@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict, deque
+from hashlib import sha256
 from typing import Callable, Deque, Dict, Set
 from uuid import UUID
 
@@ -11,11 +12,12 @@ from sqlalchemy.orm import Session
 
 from app.deps import get_current_user, get_db
 from app.models import User
+from app.settings import get_settings
 
 from .admin_settings import AdminSettings, get_admin_settings
 from .cache import PermissionCache, get_permission_cache
 from .models import Permission, RolePermission, UserRole
-from .security import enforce_csrf
+from .security import enforce_csrf, enforce_signed_request
 
 
 class RateLimiter:
@@ -23,18 +25,33 @@ class RateLimiter:
         self.requests = requests
         self.window_seconds = window_seconds
         self.hits: Dict[str, Deque[float]] = defaultdict(deque)
+        self.blocked_until: Dict[str, float] = {}
+        self.offences: Dict[str, int] = defaultdict(int)
 
     def check(self, key: str) -> None:
         now = time.time()
+        blocked_at = self.blocked_until.get(key)
+        if blocked_at and blocked_at > now:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Rate limit lockout in effect. Please retry later.",
+            )
+
         window_start = now - self.window_seconds
         queue = self.hits[key]
         while queue and queue[0] < window_start:
             queue.popleft()
         if len(queue) >= self.requests:
+            self.offences[key] += 1
+            backoff_seconds = min(self.window_seconds * (2 ** min(self.offences[key], 4)), 900)
+            self.blocked_until[key] = now + backoff_seconds
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Rate limit exceeded. Please retry later.",
             )
+        if self.offences[key]:
+            # Slowly decay offence counter for sustained compliant behaviour.
+            self.offences[key] = max(self.offences[key] - 1, 0)
         queue.append(now)
 
 
@@ -53,7 +70,11 @@ def get_rate_limiter() -> RateLimiter:
 
 
 def rate_limit_dependency(request: Request) -> None:
-    key = request.client.host if request.client else "anonymous"
+    settings = get_settings()
+    session_token = request.cookies.get(settings.session_cookie_name, "")
+    session_hash = sha256(session_token.encode("utf-8")).hexdigest() if session_token else "anon"
+    host = request.client.host if request.client else "anonymous"
+    key = f"{session_hash}:{host}"
     get_rate_limiter().check(key)
 
 
@@ -112,7 +133,9 @@ def require_perm(code: str) -> Callable[[User], User]:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Missing required permission: {code}",
             )
-        enforce_csrf(request)
+        csrf_token = enforce_csrf(request)
+        enforce_signed_request(request, csrf_token)
+        request.state.admin_actor_id = str(current_user.id)
         return current_user
 
     return dependency

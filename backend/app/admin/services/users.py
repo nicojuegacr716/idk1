@@ -14,12 +14,28 @@ from ..deps import invalidate_permission_cache_for_user
 from ..models import Role, UserRole
 from ..schemas import (
     AdminUser,
+    AdminUserListItem,
     RoleSummary,
     UserCreate,
     UserListResponse,
     UserQueryParams,
     UserUpdate,
 )
+
+
+def _mask_email(email: str | None) -> str | None:
+    if not email or "@" not in email:
+        return email
+    local, domain = email.split("@", 1)
+    if not local:
+        return f"*@{domain}"
+    if len(local) == 1:
+        masked_local = "*"
+    elif len(local) == 2:
+        masked_local = f"{local[0]}*"
+    else:
+        masked_local = f"{local[0]}{'*' * (len(local) - 2)}{local[-1]}"
+    return f"{masked_local}@{domain}"
 
 
 def _map_user(user: User, roles: Sequence[RoleSummary]) -> AdminUser:
@@ -32,6 +48,19 @@ def _map_user(user: User, roles: Sequence[RoleSummary]) -> AdminUser:
         avatar_url=user.avatar_url,
         phone_number=user.phone_number,
         coins=user.coins or 0,
+        roles=list(roles),
+    )
+
+
+def _map_user_safe(user: User, roles: Sequence[RoleSummary]) -> AdminUserListItem:
+    return AdminUserListItem(
+        id=user.id,
+        username=user.username,
+        email_masked=_mask_email(user.email),
+        display_name=user.display_name,
+        avatar_url=user.avatar_url,
+        coins=user.coins or 0,
+        discord_id_suffix=user.discord_id[-4:] if user.discord_id else None,
         roles=list(roles),
     )
 
@@ -84,7 +113,7 @@ def list_users(db: Session, params: UserQueryParams) -> UserListResponse:
 
     users = list(db.scalars(query))
     role_map = _roles_for_users(db, [user.id for user in users])
-    items = [_map_user(user, role_map.get(user.id, [])) for user in users]
+    items = [_map_user_safe(user, role_map.get(user.id, [])) for user in users]
     return UserListResponse(items=items, total=total, page=params.page, page_size=params.page_size)
 
 
@@ -292,3 +321,4 @@ def update_user_coins(
     )
     db.commit()
     return get_user(db, user.id)
+

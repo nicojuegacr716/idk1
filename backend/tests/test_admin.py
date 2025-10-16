@@ -129,9 +129,19 @@ def _set_session_cookie(client: TestClient, session_token: str) -> None:
 
 
 def _csrf_header(session_token: str, path: str) -> dict[str, str]:
+    import hashlib
+    import time
+
     from app.admin.security import compute_csrf_token
 
-    return {"X-CSRF-Token": compute_csrf_token(session_token, path)}
+    token = compute_csrf_token(session_token, path)
+    timestamp = str(int(time.time() * 1000))
+    signature = hashlib.sha256(f"{token}:{timestamp}".encode("utf-8")).hexdigest()
+    return {
+        "X-CSRF-Token": token,
+        "X-Request-Timestamp": timestamp,
+        "X-Request-Signature": signature,
+    }
 
 
 def test_admin_permission_denied_for_non_privileged_user(client_with_db):
@@ -349,5 +359,3 @@ def test_admin_role_detail_page(client_with_db):
     assert any(perm["code"] == "custom:build" for perm in payload["permissions"])
 
     client.app.dependency_overrides.pop(override, None)
-
-

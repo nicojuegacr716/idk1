@@ -147,8 +147,19 @@ export interface AdminUser {
   roles: RoleSummary[];
 }
 
+export interface AdminUserListItem {
+  id: string;
+  username: string;
+  email_masked: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  coins: number;
+  discord_id_suffix: string | null;
+  roles: RoleSummary[];
+}
+
 export interface AdminUsersResponse {
-  items: AdminUser[];
+  items: AdminUserListItem[];
   total: number;
   page: number;
   page_size: number;
