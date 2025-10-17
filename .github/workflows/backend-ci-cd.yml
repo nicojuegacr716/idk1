@@ -23,6 +23,7 @@ jobs:
     timeout-minutes: 15
     env:
       PYTHONPATH: ${{ github.workspace }}/backend
+      ENCRYPTION_KEY: V_wOMOpdrTLVPK7bHDpqxV0ltdF4O8GxRCQj9pW2b8E=
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
