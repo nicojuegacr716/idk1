@@ -115,12 +115,13 @@ jobs:
         if: steps.secrets-check.outputs.should_deploy == 'true'
         working-directory: backend
         run: >
+          rm -f "../$ARCHIVE_NAME" &&
           tar --exclude='./.git'
           --exclude='./.env'
           --exclude='./frontend/.env'
           --exclude='./.pytest_cache'
           --exclude='__pycache__'
-          -czf "$ARCHIVE_NAME" .
+          -czf "../$ARCHIVE_NAME" .
 
       - name: Ensure remote deployment directory exists
         if: steps.secrets-check.outputs.should_deploy == 'true'
@@ -143,7 +144,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           port: ${{ env.SSH_PORT }}
           key: ${{ secrets.SSH_KEY }}
-          source: backend/${{ env.ARCHIVE_NAME }}
+          source: ${{ env.ARCHIVE_NAME }}
           target: ${{ format('{0}/releases/{1}', env.DEPLOY_PATH, env.ARCHIVE_NAME) }}
 
       - name: Deploy on remote host

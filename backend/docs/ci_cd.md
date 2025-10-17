@@ -5,7 +5,7 @@ This repository now includes an end-to-end GitHub Actions workflow that validate
 ## Workflow overview
 - **Trigger:** every push to `main` (and manual runs via *Run workflow*).
 - **Test job:** checks out the code, installs Python `3.11`, restores cached dependencies, installs the project with the `dev` extras, primes required env vars (such as `ENCRYPTION_KEY`), runs `pytest`, and then executes the Vite build for the embedded frontend.
-- **Deploy job:** (only runs if tests pass and all deployment secrets exist) validates the Docker build, archives the repository while excluding `.env` files, uploads the archive to the remote host, and rebuilds/restarts the Compose stack with `docker compose up -d --build --remove-orphans`.
+- **Deploy job:** (only runs if tests pass and all deployment secrets exist) validates the Docker build, creates a tarball from the `backend/` subtree (excluding `.env` files) in the workspace root, uploads it to the remote host, and rebuilds/restarts the Compose stack with `docker compose up -d --build --remove-orphans`.
 - **Error handling:** any failure in the SSH/deploy step surfaces in the GitHub Actions logs so problems are visible directly in the PR or push status.
 
 ## Required GitHub secrets
