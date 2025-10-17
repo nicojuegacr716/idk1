@@ -118,7 +118,7 @@ export default function Dashboard() {
     {
       title: "Coin Balance",
       value: formatCoins(profile?.coins ?? 0),
-      description: "Fetched from /me",
+      description: "From your account wallet",
       icon: Zap,
       accent: "text-warning",
     },

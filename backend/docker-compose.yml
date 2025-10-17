@@ -1,9 +1,10 @@
-services:
+﻿services:
   backend:
     build: .
     env_file: .env
     environment:
       ALLOWED_ORIGINS: http://localhost:3048
+      FORWARDED_ALLOW_IPS: "*"
     depends_on:
       db:
         condition: service_healthy
