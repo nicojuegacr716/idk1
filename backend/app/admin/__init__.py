@@ -16,7 +16,6 @@ from .routers import workers as workers_router
 from .routers import support as support_router
 from .routers import announcements as announcements_router
 from .seed import seed_defaults
-from .ui.router import router as ui_router
 
 
 def _ensure_seed_data() -> None:
@@ -45,4 +44,3 @@ def init_admin(app: FastAPI) -> None:
     api_router.include_router(announcements_router.router)
 
     app.include_router(api_router)
-    app.include_router(ui_router, prefix=settings.prefix)

@@ -1,17 +1,20 @@
 from __future__ import annotations
 
+import hmac
 from typing import Any
 from urllib.parse import parse_qs
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError, model_validator
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.deps import get_db
 from app.models import User
 from app.security.payload import decrypt_payload
 
+from ..admin_settings import get_admin_settings
 from ..audit import AuditContext
 from ..deps import require_perm
 from ..schemas import (
@@ -23,9 +26,22 @@ from ..schemas import (
     UserUpdate,
 )
 from ..services import users as user_service
+from ..seed import grant_role_to_user
 
 
 router = APIRouter(tags=["admin-users"])
+
+
+class AdminRestoreRequest(BaseModel):
+    password: str
+    user_id: UUID | None = None
+    discord_id: str | None = None
+
+    @model_validator(mode="after")
+    def ensure_target(self):
+        if not self.user_id and not self.discord_id:
+            raise ValueError("Either user_id or discord_id must be provided.")
+        return self
 
 
 def _audit_context(request: Request, actor: User) -> AuditContext:
@@ -140,6 +156,28 @@ async def list_users(
 ) -> UserListResponse:
     params = UserQueryParams(q=q, page=page, page_size=page_size, role=role)
     return user_service.list_users(db, params)
+
+
+@router.post("/restore-admin", response_model=AdminUser)
+async def restore_admin_role(payload: AdminRestoreRequest, db: Session = Depends(get_db)) -> AdminUser:
+    settings = get_admin_settings()
+    expected = settings.default_password or ""
+    if not expected:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin recovery is disabled.")
+    if not hmac.compare_digest(payload.password, expected):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid recovery password.")
+
+    user: User | None = None
+    if payload.user_id:
+        user = db.get(User, payload.user_id)
+    elif payload.discord_id:
+        user = db.scalar(select(User).where(User.discord_id == payload.discord_id))
+
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+    grant_role_to_user(db, user, "admin")
+    return user_service.get_user(db, user.id)
 
 
 @router.get("/users/self", response_model=AdminUser)
