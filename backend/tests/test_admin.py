@@ -194,7 +194,7 @@ def test_admin_user_lifecycle_and_audit_logs(client_with_db):
         assert mod_role is not None
     assign_path = f"/api/v1/admin/users/{created_id}/roles"
     assign_headers = _csrf_header(session_token, assign_path)
-    response = client.post(assign_path, data=[("role_ids", str(mod_role.id))], headers=assign_headers)
+    response = client.post(assign_path, json={"role_ids": [str(mod_role.id)]}, headers=assign_headers)
     assert response.status_code == 200
 
     delete_headers = _csrf_header(session_token, update_path)
