@@ -11,18 +11,18 @@ import type { VpsProduct } from "@/lib/types";
 const marketingFeatures = [
   {
     icon: Server,
-    title: "Instant VPS Deployment",
-    description: "Launch dedicated Windows or Linux sessions in seconds using real worker nodes.",
+    title: "Tạo VPS trong vài giây",
+    description: "Khởi tạo phiên Windows hoặc Linux thật, sẵn sàng dùng ngay.",
   },
   {
     icon: Zap,
-    title: "Automation Included",
-    description: "Provisioning flows trigger real workers through LT4C's dispatcher and callback APIs.",
+    title: "Tự động hóa mọi thao tác",
+    description: "Hệ thống tự cấp phát và kích hoạt máy, bạn chỉ việc bấm chọn.",
   },
   {
     icon: Shield,
-    title: "Trusted Security",
-    description: "Session tokens, idempotency keys, and worker signatures keep your infrastructure safe.",
+    title: "Bảo mật tin cậy",
+    description: "Quy trình đăng nhập và khởi chạy được bảo vệ nhiều lớp.",
   },
 ];
 
@@ -32,7 +32,7 @@ const getProductTagline = (product: VpsProduct): string => {
   if (product.description) {
     return product.description;
   }
-  return "Managed VPS capacity delivered by LT4C workers.";
+  return "Tài nguyên VPS được quản lý bởi LT4C.";
 };
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
@@ -79,21 +79,21 @@ export default function Landing() {
           </div>
           <nav className="hidden md:flex items-center gap-6">
             <a href="#features" className="text-sm hover:text-primary transition-colors">
-              Features
+              Tính năng
             </a>
             <a href="#pricing" className="text-sm hover:text-primary transition-colors">
-              Pricing
+              Bảng giá
             </a>
             <a href="#about" className="text-sm hover:text-primary transition-colors">
-              About
+              Giới thiệu
             </a>
           </nav>
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={handlePrimaryAction}>
-              {isAuthenticated ? "Dashboard" : "Sign In"}
+              {isAuthenticated ? "Bảng điều khiển" : "Đăng nhập"}
             </Button>
             <Button size="sm" className="gap-2" onClick={handlePrimaryAction}>
-              {isAuthenticated ? "Open Console" : "Get Started"}
+              {isAuthenticated ? "Mở Console" : "Bắt đầu"}
               <ArrowRight className="w-4 h-4" />
             </Button>
           </div>
@@ -104,33 +104,32 @@ export default function Landing() {
         <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
           <h1 className="text-5xl md:text-7xl font-bold leading-tight">
             Cloud VPS
-            <span className="gradient-text"> Simplified</span>
+            <span className="gradient-text"> cực đơn giản</span>
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Provision real Windows VPS sessions backed by LT4C workers. Each click triggers the backend dispatcher,
-            worker callbacks, and status streaming you can inspect in the dashboard.
+            Khởi tạo VPS Windows thực, theo dõi tiến trình khởi chạy ngay trên bảng điều khiển. Trải nghiệm mượt, thao tác nhanh.
           </p>
           <div className="flex gap-4 justify-center">
             <Button size="lg" className="gap-2" onClick={handlePrimaryAction}>
-              {isAuthenticated ? "Go To Dashboard" : "Start With Discord"}
+              {isAuthenticated ? "Vào bảng điều khiển" : "Đăng nhập bằng Discord"}
               <ArrowRight className="w-5 h-5" />
             </Button>
             <Button size="lg" variant="outline" onClick={() => window.scrollTo({ top: window.innerHeight, behavior: "smooth" })}>
-              View Live Features
+              Xem tính năng
             </Button>
           </div>
           <div className="flex items-center justify-center gap-8 text-sm text-muted-foreground pt-8">
             <div className="flex items-center gap-2">
               <Check className="w-4 h-4 text-success" />
-              <span>Real Discord OAuth & session cookies</span>
+              <span>Đăng nhập Discord an toàn</span>
             </div>
             <div className="flex items-center gap-2">
               <Check className="w-4 h-4 text-success" />
-              <span>Backed by FastAPI + Postgres</span>
+              <span>Hạ tầng ổn định, tốc độ cao</span>
             </div>
             <div className="flex items-center gap-2">
               <Check className="w-4 h-4 text-success" />
-              <span>Observability-ready worker callbacks</span>
+              <span>Theo dõi trạng thái thời gian thực</span>
             </div>
           </div>
         </div>
@@ -138,9 +137,9 @@ export default function Landing() {
 
       <section id="features" className="container mx-auto px-6 py-24">
         <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold mb-4">Why Builders Choose LT4C</h2>
+          <h2 className="text-4xl font-bold mb-4">Vì sao chọn LT4C</h2>
           <p className="text-muted-foreground text-lg">
-            Every screen in this UI maps to concrete FastAPI endpoints. Nothing is mocked.
+            Tất cả tính năng trên giao diện đều hoạt động thật, không phải demo.
           </p>
         </div>
         <div className="grid md:grid-cols-3 gap-8">
@@ -160,17 +159,17 @@ export default function Landing() {
 
       <section id="pricing" className="container mx-auto px-6 py-24">
         <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold mb-4">Live Product Catalog</h2>
+          <h2 className="text-4xl font-bold mb-4">Danh mục gói VPS</h2>
           <p className="text-muted-foreground text-lg">
-            Products are loaded directly from <code className="font-mono text-xs">/vps/products</code>.
+            Danh sách gói được cập nhật theo thời gian thực.
           </p>
         </div>
         <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
           {loadingProducts && (
             <Card className="glass-card md:col-span-3">
               <CardHeader>
-                <CardTitle>Loading products...</CardTitle>
-                <CardDescription>Querying real backend endpoints.</CardDescription>
+                <CardTitle>Đang tải gói VPS...</CardTitle>
+                <CardDescription>Đang lấy dữ liệu mới nhất.</CardDescription>
               </CardHeader>
             </Card>
           )}
@@ -178,9 +177,9 @@ export default function Landing() {
           {!loadingProducts && products.length === 0 && (
             <Card className="glass-card md:col-span-3">
               <CardHeader>
-                <CardTitle>No active products yet</CardTitle>
+                <CardTitle>Chưa có gói khả dụng</CardTitle>
                 <CardDescription>
-                  Use the admin console to seed VPS plans via <code className="font-mono text-xs">/api/v1/admin/vps-products</code>.
+                  Vui lòng quay lại sau hoặc liên hệ hỗ trợ để biết thêm thông tin.
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -198,11 +197,10 @@ export default function Landing() {
 
       <section id="about" className="container mx-auto px-6 py-24">
         <div className="max-w-4xl mx-auto text-center space-y-6">
-          <h2 className="text-3xl font-bold">Built For Real Operations</h2>
+          <h2 className="text-3xl font-bold">Thiết kế để vận hành thực tế</h2>
           <p className="text-muted-foreground text-lg">
-            This repository pairs a modern React frontend with the production FastAPI backend that powers LT4C.
-            Workers, sessions, support threads, ads claims, admin roles--every entity is persisted in Postgres and
-            accessible via the documented API.
+            Giao diện hiện đại kết nối trực tiếp với hệ thống LT4C. Phiên làm việc, hỗ trợ, vai trò quản trị
+            đều được lưu trữ an toàn và quản lý tập trung.
           </p>
         </div>
       </section>
@@ -216,7 +214,7 @@ export default function Landing() {
               </div>
               <span className="font-bold gradient-text">LifeTech4Code</span>
             </div>
-            <p className="text-sm text-muted-foreground">(c) {new Date().getFullYear()} LifeTech4Code. All rights reserved.</p>
+            <p className="text-sm text-muted-foreground">(c) {new Date().getFullYear()} LifeTech4Code. Mọi quyền được bảo lưu.</p>
           </div>
         </div>
       </footer>
@@ -239,7 +237,7 @@ const PricingCard = ({
     {highlight && (
       <div className="absolute -top-4 left-1/2 -translate-x-1/2">
         <span className="bg-gradient-to-r from-primary to-secondary text-white px-4 py-1 rounded-full text-sm font-medium">
-          Featured
+          Nổi bật
         </span>
       </div>
     )}
@@ -247,13 +245,13 @@ const PricingCard = ({
       <CardTitle className="text-2xl capitalize">{product.name}</CardTitle>
       <div className="mt-4">
         <span className="text-4xl font-bold text-warning">{formatCoins(product.price_coins)}</span>
-        <span className="text-muted-foreground ml-2">coins</span>
+        <span className="text-muted-foreground ml-2">coin</span>
       </div>
       <CardDescription>{getProductTagline(product)}</CardDescription>
     </CardHeader>
     <CardContent>
       <Button className="w-full" variant={highlight ? "default" : "outline"} onClick={onAction}>
-        {highlight ? "Launch In Dashboard" : "Authenticate to Launch"}
+        {highlight ? "Khởi chạy trong bảng điều khiển" : "Đăng nhập để khởi chạy"}
       </Button>
     </CardContent>
   </Card>
