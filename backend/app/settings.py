@@ -1,5 +1,7 @@
-﻿from functools import lru_cache
+import re
+from functools import lru_cache
 from typing import List, Set
+from urllib.parse import urlparse
 
 from pydantic import AnyHttpUrl, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -31,14 +33,46 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    @staticmethod
+    def _origin_from_url(value: str | AnyHttpUrl | None) -> str | None:
+        if not value:
+            return None
+        try:
+            parsed = urlparse(str(value).strip())
+        except ValueError:
+            return None
+        if not parsed.scheme or not parsed.hostname:
+            return None
+        origin = f"{parsed.scheme}://{parsed.hostname}"
+        if parsed.port:
+            origin = f"{origin}:{parsed.port}"
+        return origin
+
     @property
     def allowed_origins_list(self) -> List[str]:
-        raw = self.allowed_origins.strip()
-        if not raw:
-            return []
+        raw = (self.allowed_origins or "").strip()
         if raw == "*":
             return ["*"]
-        return [value.strip() for value in raw.split(",") if value.strip()]
+
+        origins: List[str] = []
+
+        def _add_origin(candidate: str | None) -> None:
+            if not candidate or candidate in origins:
+                return
+            origins.append(candidate)
+
+        if raw:
+            for entry in re.split(r"[\s,]+", raw):
+                candidate = entry.strip()
+                if not candidate:
+                    continue
+                parsed = self._origin_from_url(candidate)
+                _add_origin(parsed or candidate)
+
+        fallback = self._origin_from_url(self.frontend_redirect_url)
+        _add_origin(fallback)
+
+        return origins
 
     @property
     def discord_scopes(self) -> str:
