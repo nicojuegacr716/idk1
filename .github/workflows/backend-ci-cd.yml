@@ -207,5 +207,18 @@ jobs:
               exit 1
             fi
 
-            $DOCKER_COMPOSE up -d --build --remove-orphans
+            DB_USER="${POSTGRES_USER:-lt4cdatacenter}"
+            DB_NAME="${POSTGRES_DB:-lt4cdatafarm1}"
+
+            $DOCKER_COMPOSE build backend frontend
+            $DOCKER_COMPOSE up -d db
+
+            echo "Waiting for database to become ready..."
+            until $DOCKER_COMPOSE exec -T db pg_isready -U "$DB_USER" -d "$DB_NAME" >/dev/null 2>&1; do
+              sleep 2
+            done
+
+            $DOCKER_COMPOSE run --rm backend alembic upgrade head
+
+            $DOCKER_COMPOSE up -d --remove-orphans
             $DOCKER_COMPOSE ps
