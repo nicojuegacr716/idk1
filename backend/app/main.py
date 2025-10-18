@@ -54,39 +54,25 @@ else:
     logger.warning("CORS middleware disabled; no allowed origins configured.")
 
 
-@app.middleware("http")
-async def ensure_cors_headers(request: Request, call_next):
-    response = await call_next(request)
-
+def _preflight_headers(request: Request) -> tuple[dict[str, str], bool]:
     allowed_origins = settings.allowed_origins_list
     origin = request.headers.get("origin")
     allow_all = "*" in allowed_origins
     origin_allowed = allow_all or (origin and origin in allowed_origins)
 
+    headers: dict[str, str] = {
+        "Access-Control-Allow-Methods": request.headers.get("access-control-request-method", _ALLOWED_METHODS_HEADER),
+        "Access-Control-Allow-Headers": request.headers.get("access-control-request-headers", "*"),
+        "Access-Control-Max-Age": "600",
+    }
+    should_vary = False
     if origin_allowed:
-        response.headers["Access-Control-Allow-Origin"] = "*" if allow_all else origin  # type: ignore[arg-type]
+        headers["Access-Control-Allow-Origin"] = "*" if allow_all else origin  # type: ignore[arg-type]
         if not allow_all:
-            response.headers.setdefault("Access-Control-Allow-Credentials", "true")
-        vary_header = response.headers.get("Vary")
-        if vary_header:
-            vary_parts = {part.strip() for part in vary_header.split(",") if part.strip()}
-            if "Origin" not in vary_parts:
-                response.headers["Vary"] = f"{vary_header}, Origin"
-        else:
-            response.headers["Vary"] = "Origin"
+            headers["Access-Control-Allow-Credentials"] = "true"
+            should_vary = True
+    return headers, should_vary
 
-    if request.method == "OPTIONS":
-        request_headers = request.headers.get("access-control-request-headers")
-        response.headers.setdefault("Access-Control-Allow-Methods", _ALLOWED_METHODS_HEADER)
-        if request_headers:
-            response.headers.setdefault("Access-Control-Allow-Headers", request_headers)
-        else:
-            response.headers.setdefault("Access-Control-Allow-Headers", "*")
-        response.headers.setdefault("Access-Control-Max-Age", "600")
-        if response.status_code in {status.HTTP_404_NOT_FOUND, status.HTTP_405_METHOD_NOT_ALLOWED}:
-            response = Response(status_code=status.HTTP_204_NO_CONTENT, headers=dict(response.headers))
-
-    return response
 
 oauth_client = DiscordOAuthClient(settings=settings)
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
@@ -118,6 +104,14 @@ app.include_router(ads_router.router)
 app.include_router(support_router.router)
 app.include_router(announcements_router.router)
 app.include_router(profile_router.router)
+
+
+@app.options("/{path:path}", include_in_schema=False)
+async def cors_preflight(path: str, request: Request) -> Response:
+    headers, vary_origin = _preflight_headers(request)
+    if vary_origin:
+        headers["Vary"] = "Origin"
+    return Response(status_code=status.HTTP_204_NO_CONTENT, headers=headers)
 
 @app.get("/", include_in_schema=False)
 async def index(request: Request) -> Response:
