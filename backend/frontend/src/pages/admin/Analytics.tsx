@@ -1,17 +1,18 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Database, Server, Users, Zap } from "lucide-react";
+import { Activity, Database, Globe, Server, Users, Zap } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   fetchAdminUsers,
+  fetchHealthConfig,
   fetchStatusDb,
   fetchStatusDeps,
   fetchStatusHealth,
   fetchVpsSessions,
   fetchWorkers,
 } from "@/lib/api-client";
-import type { AdminUsersResponse, StatusDb, StatusDeps, StatusHealth } from "@/lib/types";
+import type { AdminUsersResponse, HealthConfig, StatusDb, StatusDeps, StatusHealth } from "@/lib/types";
 
 const formatNumber = (value: number | null | undefined, digits = 1) => {
   if (value === null || value === undefined) return "--";
@@ -60,6 +61,14 @@ export default function Analytics() {
     staleTime: 10_000,
   });
 
+  const { data: healthConfig } = useQuery<HealthConfig>({
+    queryKey: ["health-config"],
+    queryFn: fetchHealthConfig,
+    staleTime: 60_000,
+  });
+
+  const currentOrigin = typeof window !== "undefined" ? window.location.origin : "";
+
   const summaries = useMemo(() => {
     const activeSessions = sessions.filter((session) => session.status !== "deleted").length;
     const readySessions = sessions.filter((session) => session.status === "ready").length;
@@ -102,6 +111,16 @@ export default function Analytics() {
             value: workers.length.toString(),
             description: `${summaries.busyWorkers} busy / ${summaries.idleWorkers} idle`,
             icon: Zap,
+          },
+          {
+            label: "CORS Origins",
+            value: healthConfig?.allowed_origins?.length
+              ? healthConfig.allowed_origins.length.toString()
+              : "--",
+            description: healthConfig?.allowed_origins?.[0]
+              ? `First origin: ${healthConfig.allowed_origins[0]}`
+              : "From /health/config",
+            icon: Globe,
           },
         ].map((stat) => (
           <Card key={stat.label} className="glass-card">
@@ -195,6 +214,43 @@ export default function Analytics() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="glass-card">
+        <CardHeader>
+          <CardTitle>CORS Configuration</CardTitle>
+          <CardDescription>
+            Runtime data directly from <code className="font-mono text-xs">/health/config</code>
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold mb-2">Allowed Origins</h3>
+            {healthConfig?.allowed_origins?.length ? (
+              <ul className="space-y-2">
+                {healthConfig.allowed_origins.map((origin) => (
+                  <li
+                    key={origin}
+                    className="flex items-center justify-between rounded-lg border border-border/40 px-3 py-2 text-sm"
+                  >
+                    <code className="break-all">{origin}</code>
+                    {currentOrigin && origin === currentOrigin && (
+                      <span className="ml-3 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600">
+                        current
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">No origins reported by the API.</p>
+            )}
+          </div>
+          <div className="flex items-center justify-between rounded-lg border border-border/40 px-3 py-2 text-sm">
+            <span className="font-medium">Credentials</span>
+            <span>{healthConfig?.allow_credentials ? "Enabled" : "Disabled"}</span>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

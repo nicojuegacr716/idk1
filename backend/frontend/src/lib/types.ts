@@ -212,6 +212,11 @@ export interface StatusHealth {
   build_time: string | null;
 }
 
+export interface HealthConfig {
+  allowed_origins: string[];
+  allow_credentials: boolean;
+}
+
 export interface StatusDeps {
   db_ping_ms: number | null;
   redis_ping_ms: number | null;

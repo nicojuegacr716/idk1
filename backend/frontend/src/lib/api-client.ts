@@ -3,6 +3,7 @@ import type {
   AdminUser,
   AdminUsersResponse,
   AdsSettings,
+  HealthConfig,
   KyaroPrompt,
   StatusDb,
   StatusDeps,
@@ -704,6 +705,10 @@ export const fetchStatusHealth = async (): Promise<StatusHealth> => {
   return apiFetch<StatusHealth>("/api/v1/admin/status/health");
 };
 
+export const fetchHealthConfig = async (): Promise<HealthConfig> => {
+  return apiFetch<HealthConfig>("/health/config");
+};
+
 export const fetchStatusDeps = async (): Promise<StatusDeps> => {
   return apiFetch<StatusDeps>("/api/v1/admin/status/deps");
 };
@@ -729,4 +734,3 @@ export const updateKyaroPrompt = async (prompt: string): Promise<KyaroPrompt> =>
     body,
   });
 };
-
