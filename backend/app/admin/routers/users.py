@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import parse_qs
 from pydantic import ValidationError
 from uuid import UUID
 
@@ -67,7 +68,19 @@ async def _read_secure_payload(request: Request) -> dict[str, Any]:
         if isinstance(parsed, dict):
             return parsed
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="JSON body must be an object.")
-    form = await request.form()
+    try:
+        form = await request.form()
+    except TypeError:
+        raw_body = await request.body()
+        if not raw_body:
+            return {}
+        try:
+            decoded = raw_body.decode("utf-8")
+        except UnicodeDecodeError:
+            decoded = raw_body.decode("latin-1")
+        parsed = parse_qs(decoded, keep_blank_values=True)
+        data = {key: values[0] if len(values) == 1 else values for key, values in parsed.items()}
+        return data
     data: dict[str, Any] = {}
     for key in form.keys():
         values = form.getlist(key)
