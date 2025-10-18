@@ -291,7 +291,17 @@ async def discord_callback(
 
 
 @app.get("/me", response_model=UserProfile)
-async def read_me(current_user: User = Depends(get_current_user)) -> UserProfile:
+async def read_me(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserProfile:
+    role_names = db.scalars(
+        select(Role.name)
+        .join(UserRole, UserRole.role_id == Role.id)
+        .where(UserRole.user_id == current_user.id)
+    ).all()
+    roles = list(role_names)
+    is_admin = any(name.lower() == "admin" for name in roles)
     return UserProfile(
         id=current_user.id,
         email=current_user.email,
@@ -300,6 +310,8 @@ async def read_me(current_user: User = Depends(get_current_user)) -> UserProfile
         avatar_url=current_user.avatar_url,
         phone_number=None,
         coins=current_user.coins or 0,
+        roles=roles,
+        is_admin=is_admin,
     )
 
 

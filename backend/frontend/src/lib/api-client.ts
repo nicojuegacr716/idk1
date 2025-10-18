@@ -434,7 +434,7 @@ export const fetchAdminUser = async (id: string): Promise<AdminUser> => {
 };
 
 export const fetchAdminSelf = async (): Promise<AdminUser> => {
-  return apiFetch<AdminUser>("/api/v1/admin/users/me");
+  return apiFetch<AdminUser>("/api/v1/admin/users/self");
 };
 
 export const createAdminUser = async (payload: {

@@ -11,6 +11,8 @@ class UserProfile(BaseModel):
     avatar_url: str | None
     phone_number: str | None
     coins: int = 0
+    roles: list[str] = []
+    is_admin: bool = False
 
 
 class HealthStatus(BaseModel):

@@ -38,19 +38,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const profile = profileQuery.data ?? null;
   const adminQueryKey = useMemo(() => ["admin-user"] as const, []);
+  const hasAdminRole = Boolean(profile?.is_admin);
 
   const adminQuery = useQuery({
     queryKey: adminQueryKey,
     queryFn: fetchAdminSelf,
     retry: false,
-    enabled: isClient && !!profile,
+    enabled: isClient && hasAdminRole,
     staleTime: 30_000,
   });
 
   const refresh = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["profile"] });
-    queryClient.invalidateQueries({ queryKey: adminQueryKey });
-  }, [adminQueryKey, queryClient]);
+    if (hasAdminRole) {
+      queryClient.invalidateQueries({ queryKey: adminQueryKey });
+    }
+  }, [adminQueryKey, hasAdminRole, queryClient]);
 
   const logout = useCallback(async () => {
     await apiLogout();
@@ -83,23 +86,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [adminQueryKey, queryClient]);
 
   useEffect(() => {
-    if (adminQuery.data) {
+    if (hasAdminRole && adminQuery.data) {
       setAdminRevoked(false);
       resetAdminForbiddenState();
     }
-  }, [adminQuery.data]);
+  }, [adminQuery.data, hasAdminRole]);
+
+  useEffect(() => {
+    if (!hasAdminRole) {
+      setAdminRevoked(false);
+      resetAdminForbiddenState();
+      queryClient.setQueryData(adminQueryKey, null);
+    }
+  }, [adminQueryKey, hasAdminRole, queryClient]);
 
   const value = useMemo<AuthContextValue>(() => {
-    const isLoading = !isClient || profileQuery.isLoading || adminQuery.isLoading;
-    const error = profileQuery.error ?? adminQuery.error ?? null;
-    const adminUser = adminQuery.data ?? null;
+    const adminLoading = hasAdminRole ? adminQuery.isLoading : false;
+    const isLoading = !isClient || profileQuery.isLoading || adminLoading;
+    const error = profileQuery.error ?? (hasAdminRole ? adminQuery.error : null) ?? null;
+    const adminUser = hasAdminRole ? adminQuery.data ?? null : null;
     return {
       profile,
       adminUser,
       isLoading,
       error,
       isAuthenticated: Boolean(profile),
-      hasAdminAccess: Boolean(adminUser) && !adminRevoked,
+      hasAdminAccess: hasAdminRole && !adminRevoked,
       refresh,
       logout,
     };
@@ -110,6 +122,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     adminRevoked,
     logout,
     isClient,
+    hasAdminRole,
     profile,
     profileQuery.error,
     profileQuery.isLoading,

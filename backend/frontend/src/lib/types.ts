@@ -6,6 +6,8 @@ export interface UserProfile {
   avatar_url: string | null;
   phone_number: string | null;
   coins: number;
+   roles: string[];
+   is_admin: boolean;
 }
 
 export interface ChecklistItem {
