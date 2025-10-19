@@ -305,8 +305,22 @@ async def read_me(
         .where(UserRole.user_id == current_user.id)
     ).all()
     roles = list(role_names)
-    is_admin = any(name.lower() == "admin" for name in roles)
-    has_admin_flag = getattr(current_user, "has_admin", None)
+    has_admin_attr = bool(getattr(current_user, "has_admin", False))
+    has_admin_role = any(name.lower() == "admin" for name in roles)
+    if has_admin_role and not has_admin_attr:
+        try:
+            current_user.has_admin = True
+            db.add(current_user)
+            db.commit()
+            db.refresh(current_user)
+        except Exception:  # pragma: no cover - defensive fallback
+            db.rollback()
+        has_admin_attr = True
+    if has_admin_attr and not has_admin_role:
+        roles.append("admin")
+        has_admin_role = True
+    is_admin = has_admin_attr or has_admin_role
+    has_admin = is_admin
     return UserProfile(
         id=current_user.id,
         email=current_user.email,
@@ -317,7 +331,7 @@ async def read_me(
         coins=current_user.coins or 0,
         roles=roles,
         is_admin=is_admin,
-        has_admin=bool(has_admin_flag) if has_admin_flag is not None else is_admin,
+        has_admin=has_admin,
     )
 
 
