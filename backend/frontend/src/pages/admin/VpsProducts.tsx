@@ -39,6 +39,7 @@ import {
 } from "@/lib/api-client";
 import type { VpsProduct, WorkerInfo } from "@/lib/types";
 import { Archive, Loader2, Pencil, PlusCircle, Power, Trash2 } from "lucide-react";
+import { Slab } from "react-loading-indicators";
 
 type ProductFormState = {
   name: string;
@@ -334,7 +335,7 @@ export default function AdminVpsProducts() {
         <CardContent>
           {productsQuery.isLoading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <Slab color="#d18d00" size="large" text="Đang tải nội dung từ server" textColor="" />
             </div>
           ) : products.length === 0 ? (
             <p className="text-sm text-muted-foreground">No products found. Create one to get started.</p>

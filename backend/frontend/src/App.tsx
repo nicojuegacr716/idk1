@@ -22,7 +22,7 @@ import AdminAnnouncements from "@/pages/admin/Announcements";
 import Analytics from "@/pages/admin/Analytics";
 import Settings from "@/pages/admin/Settings";
 import NotFound from "@/pages/NotFound";
-import { OrbitProgress } from "react-loading-indicators";
+import { ThreeDot } from "react-loading-indicators";
 
 const queryClient = new QueryClient();
 
@@ -40,7 +40,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => (
 
 const LoadingScreen = () => (
   <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
-    <OrbitProgress variant="disc" dense color="#866600" size="medium" text="" textColor="" />
+    <ThreeDot variant="bounce" color="#ffac00" size="large" text="Đang tải nội dung từ server" textColor="" />
   </div>
 );
 
