@@ -39,7 +39,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => (
 
 const LoadingScreen = () => (
   <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
-    Loading...
+    <OrbitProgress variant="disc" dense color="#866600" size="medium" text="" textColor="" />
   </div>
 );
 
