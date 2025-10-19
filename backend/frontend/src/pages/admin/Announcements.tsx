@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import {
+  ApiError,
   createAnnouncement,
   deleteAnnouncement,
   fetchAdminAnnouncement,
@@ -76,6 +77,81 @@ const AnnouncementsAdmin = () => {
     }
   }, [detailQuery.data, selectedId]);
 
+  const formatField = (path: (string | number)[] | undefined): string => {
+    if (!path || path.length === 0) {
+      return "Trường dữ liệu";
+    }
+    const cleaned = path.filter((part) => part !== "body");
+    const fieldPart =
+      [...cleaned].reverse().find((part) => typeof part === "string") ??
+      cleaned[0] ??
+      path[path.length - 1];
+    const labels: Record<string, string> = {
+      title: "Tiêu đề",
+      slug: "Đường dẫn",
+      excerpt: "Tóm tắt",
+      content: "Nội dung",
+      hero_image_url: "Liên kết ảnh",
+      attachments: "Đính kèm",
+      url: "Liên kết",
+      label: "Nhãn",
+    };
+    let label =
+      typeof fieldPart === "string" ? labels[fieldPart] ?? fieldPart : "Trường dữ liệu";
+    const indexPart = cleaned.find((part) => typeof part === "number");
+    if (typeof indexPart === "number") {
+      label += ` #${indexPart + 1}`;
+    }
+    return label;
+  };
+
+  const extractErrorMessage = (error: unknown, fallback: string): string => {
+    if (error instanceof ApiError) {
+      const data = error.data as { detail?: unknown };
+      const detail = data?.detail;
+      if (Array.isArray(detail) && detail.length > 0) {
+        const first = detail[0] as {
+          type?: string;
+          loc?: (string | number)[];
+          msg?: string;
+          ctx?: Record<string, unknown>;
+        };
+        const fieldLabel = formatField(first.loc);
+        switch (first.type) {
+          case "string_too_short": {
+            const min = typeof first.ctx?.min_length === "number" ? first.ctx.min_length : undefined;
+            return min
+              ? `${fieldLabel} cần tối thiểu ${min} ký tự.`
+              : `${fieldLabel} quá ngắn.`;
+          }
+          case "string_too_long": {
+            const max = typeof first.ctx?.max_length === "number" ? first.ctx.max_length : undefined;
+            return max
+              ? `${fieldLabel} không được dài quá ${max} ký tự.`
+              : `${fieldLabel} quá dài.`;
+          }
+          case "missing":
+          case "missing_argument":
+            return `${fieldLabel} là bắt buộc.`;
+          default:
+            if (first.msg) {
+              return `${fieldLabel} không hợp lệ: ${first.msg}`;
+            }
+            return `${fieldLabel} không hợp lệ.`;
+        }
+      }
+      if (typeof detail === "string" && detail.trim()) {
+        return detail;
+      }
+      if (error.message) {
+        return error.message;
+      }
+    } else if (error instanceof Error && error.message) {
+      return error.message;
+    }
+    return fallback;
+  };
+
   const createMutation = useMutation({
     mutationFn: createAnnouncement,
     onSuccess: (data) => {
@@ -85,8 +161,7 @@ const AnnouncementsAdmin = () => {
       setSelectedId(data.id);
     },
     onError: (error: unknown) => {
-      const message = error instanceof Error ? error.message : "Failed to publish announcement.";
-      toast(message);
+      toast(extractErrorMessage(error, "Xuất bản thông báo thất bại."));
     },
   });
 
@@ -109,8 +184,7 @@ const AnnouncementsAdmin = () => {
       queryClient.invalidateQueries({ queryKey: ["announcements"] });
     },
     onError: (error: unknown) => {
-      const message = error instanceof Error ? error.message : "Failed to update announcement.";
-      toast(message);
+      toast(extractErrorMessage(error, "Cập nhật thông báo thất bại."));
     },
   });
 
@@ -124,14 +198,13 @@ const AnnouncementsAdmin = () => {
       setDraft(emptyDraft);
     },
     onError: (error: unknown) => {
-      const message = error instanceof Error ? error.message : "Failed to delete announcement.";
-      toast(message);
+      toast(extractErrorMessage(error, "Xóa thông báo thất bại."));
     },
   });
 
   const handleSave = () => {
     if (!draft.title.trim() || !draft.content.trim()) {
-      toast("Title and content are required.");
+      toast("Tiêu đề và nội dung là bắt buộc.");
       return;
     }
 
