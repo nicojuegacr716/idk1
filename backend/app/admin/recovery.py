@@ -4,11 +4,12 @@ import hmac
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from pydantic import BaseModel, model_validator
-from sqlalchemy import select
+from pydantic import BaseModel
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.admin.admin_settings import get_admin_settings
+from app.admin.models import Role, UserRole
 from app.admin.schemas import AdminUser
 from app.admin.seed import grant_role_to_user
 from app.admin.services import users as user_service
@@ -108,16 +109,10 @@ RESTORE_ADMIN_FORM_HTML = """<!doctype html>
 <body>
   <main>
     <h1>Restore Admin Access</h1>
-    <p>Provide the recovery password and the user identifier. You must enter either a Discord ID or a User ID.</p>
+    <p>Provide the recovery password for this environment. The currently signed-in account will be restored automatically.</p>
     <form id="restore-form">
       <label for="password">Recovery password</label>
       <input id="password" name="password" type="password" placeholder="Enter recovery password" required>
-
-      <label for="discord_id">Discord ID <small>(optional)</small></label>
-      <input id="discord_id" name="discord_id" type="text" placeholder="Discord user ID">
-
-      <label for="user_id">User ID <small>(optional)</small></label>
-      <input id="user_id" name="user_id" type="text" placeholder="UUID from database">
 
       <button type="submit">Restore admin role</button>
     </form>
@@ -143,25 +138,13 @@ RESTORE_ADMIN_FORM_HTML = """<!doctype html>
 
         const formData = new FormData(form);
         const password = (formData.get("password") || "").toString().trim();
-        const discordId = (formData.get("discord_id") || "").toString().trim();
-        const userId = (formData.get("user_id") || "").toString().trim();
 
         if (!password) {
           errorEl.textContent = "Password is required.";
           return;
         }
-        if (!discordId && !userId) {
-          errorEl.textContent = "Please provide either a Discord ID or a User ID.";
-          return;
-        }
 
         const payload = { password: password };
-        if (discordId) {
-          payload.discord_id = discordId;
-        }
-        if (userId) {
-          payload.user_id = userId;
-        }
 
         statusEl.textContent = "Submitting request...";
 
@@ -220,14 +203,29 @@ class AdminRestoreRequest(BaseModel):
     user_id: UUID | None = None
     discord_id: str | None = None
 
-    @model_validator(mode="after")
-    def ensure_target(self):
-        if not self.user_id and not self.discord_id:
-            raise ValueError("Either user_id or discord_id must be provided.")
-        return self
+
+def _ensure_has_admin_flag(db: Session, user: User) -> None:
+    if not hasattr(type(user), "has_admin"):
+        return
+    if getattr(user, "has_admin", None):
+        return
+    has_admin_role = bool(
+        db.scalar(
+            select(func.count())
+            .select_from(UserRole)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(UserRole.user_id == user.id, Role.name == "admin")
+        )
+    )
+    if not has_admin_role:
+        return
+    setattr(user, "has_admin", True)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
 
 
-def restore_admin(payload: AdminRestoreRequest, db: Session) -> AdminUser:
+def restore_admin(payload: AdminRestoreRequest, db: Session, current_user: User | None = None) -> AdminUser:
     settings = get_admin_settings()
     expected = settings.default_password or ""
     if not expected:
@@ -240,9 +238,15 @@ def restore_admin(payload: AdminRestoreRequest, db: Session) -> AdminUser:
         user = db.get(User, payload.user_id)
     elif payload.discord_id:
         user = db.scalar(select(User).where(User.discord_id == payload.discord_id))
+    elif current_user:
+        user = db.get(User, current_user.id)
 
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found. Provide an identifier or sign in before retrying.",
+        )
 
     grant_role_to_user(db, user, "admin")
+    _ensure_has_admin_flag(db, user)
     return user_service.get_user(db, user.id)
