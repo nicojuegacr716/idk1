@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
 revision = "20251019_add_user_has_admin"
@@ -24,7 +24,7 @@ def upgrade() -> None:
     if not _has_column(inspector, "users", "has_admin"):
         op.add_column(
             "users",
-            sa.Column("has_admin", sa.Boolean(), nullable=False, server_default=text("0")),
+            sa.Column("has_admin", sa.Boolean(), nullable=False, server_default=sa.false()),
         )
         op.execute(
             """
