@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 from urllib.parse import parse_qs
+from uuid import UUID
 
 from pydantic import ValidationError
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
