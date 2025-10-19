@@ -14,6 +14,7 @@ import {
   Users,
   Zap,
   Plus,
+  KeyRound,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +37,8 @@ import {
   disableWorker,
   fetchWorkerDetail,
   fetchWorkers,
+  ApiError,
+  requestWorkerToken,
   registerWorker,
   updateWorker,
 } from "@/lib/api-client";
@@ -83,6 +86,8 @@ export default function Workers() {
   const [editForm, setEditForm] = useState<WorkerFormState>(DEFAULT_FORM);
   const [detailWorkerId, setDetailWorkerId] = useState<string | null>(null);
   const [healthStatus, setHealthStatus] = useState<WorkerHealthStatus | null>(null);
+  const [tokenWorker, setTokenWorker] = useState<WorkerInfo | null>(null);
+  const [tokenForm, setTokenForm] = useState({ email: "", password: "" });
 
   const { data: workers = [], isLoading } = useQuery<WorkerInfo[]>({
     queryKey: ["admin-workers"],
@@ -172,6 +177,25 @@ export default function Workers() {
     },
   });
 
+  const tokenMutation = useMutation({
+    mutationFn: ({ workerId, email, password }: { workerId: string; email: string; password: string }) =>
+      requestWorkerToken(workerId, { email, password }),
+    onSuccess: () => {
+      toast("Worker is fetching a fresh session token.");
+      setTokenWorker(null);
+      setTokenForm({ email: "", password: "" });
+    },
+    onError: (error: unknown) => {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "Failed to request worker token.";
+      toast(message);
+    },
+  });
+
   const summary = useMemo(() => {
     const total = workers.length;
     const active = workers.filter((worker) => worker.status === "active").length;
@@ -212,6 +236,17 @@ export default function Workers() {
     } else {
       updateMutation.mutate({ id: worker.id, payload: { status: "active" } });
     }
+  };
+
+  const handleTokenSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!tokenWorker) return;
+    const email = tokenForm.email.trim();
+    if (!email || !tokenForm.password) {
+      toast("Email and password are required.");
+      return;
+    }
+    tokenMutation.mutate({ workerId: tokenWorker.id, email, password: tokenForm.password });
   };
 
   const handleCopy = async (value: string) => {
@@ -312,6 +347,23 @@ export default function Workers() {
                       size="sm"
                       variant="outline"
                       className="gap-2"
+                      onClick={() => {
+                        setTokenWorker(worker);
+                        setTokenForm({ email: "", password: "" });
+                      }}
+                      disabled={tokenMutation.isLoading && tokenWorker?.id === worker.id}
+                    >
+                      {tokenMutation.isLoading && tokenWorker?.id === worker.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <KeyRound className="w-4 h-4" />
+                      )}
+                      Request token
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-2"
                       onClick={() => setEditWorker(worker)}
                     >
                       <Pencil className="w-4 h-4" />
@@ -342,6 +394,57 @@ export default function Workers() {
             );
           })}
       </div>
+
+      <Dialog
+        open={Boolean(tokenWorker)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setTokenWorker(null);
+            setTokenForm({ email: "", password: "" });
+          }
+        }}
+      >
+        <DialogContent className="glass-card max-w-md">
+          <DialogHeader>
+            <DialogTitle>Request worker session token</DialogTitle>
+            <DialogDescription>
+              Provide the NVIDIA Learn credentials that the worker should use to refresh <code>sessionid</code>.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleTokenSubmit} className="space-y-4">
+            <div className="grid gap-2">
+              <Label htmlFor="token-email">Email</Label>
+              <Input
+                id="token-email"
+                type="email"
+                autoComplete="username"
+                value={tokenForm.email}
+                onChange={(event) => setTokenForm((prev) => ({ ...prev, email: event.target.value }))}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="token-password">Password</Label>
+              <Input
+                id="token-password"
+                type="password"
+                autoComplete="current-password"
+                value={tokenForm.password}
+                onChange={(event) => setTokenForm((prev) => ({ ...prev, password: event.target.value }))}
+                required
+              />
+            </div>
+            <DialogFooter className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setTokenWorker(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" className="gap-2" disabled={tokenMutation.isLoading}>
+                {tokenMutation.isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send request"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
         <DialogContent className="glass-card max-w-lg">
@@ -535,4 +638,3 @@ const Metric = ({ label, value }: { label: string; value: string }) => (
     <p className="mt-1 text-sm font-semibold break-all">{value}</p>
   </div>
 );
-

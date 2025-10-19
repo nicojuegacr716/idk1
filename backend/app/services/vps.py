@@ -14,16 +14,7 @@ from app.services.event_bus import SessionEventBus
 from app.services.worker_client import WorkerClient
 from app.services.worker_selector import WorkerSelector
 
-CHECKLIST_TEMPLATE: List[Dict[str, object]] = [
-    {"key": "precheck", "label": "Kiem tra moi truong", "done": False},
-    {"key": "allocate", "label": "Cap phat tai nguyen", "done": False},
-    {"key": "pull-image", "label": "Keo image DLI", "done": False},
-    {"key": "provision", "label": "Khoi tao VPS", "done": False},
-    {"key": "networking", "label": "Thiet lap mang", "done": False},
-    {"key": "credentials", "label": "Tao thong tin dang nhap", "done": False},
-    {"key": "verification", "label": "Kiem tra san sang", "done": False},
-    {"key": "finalize", "label": "Hoan tat", "done": False},
-]
+CHECKLIST_TEMPLATE: List[Dict[str, object]] = []
 
 
 class VpsService:
@@ -92,6 +83,7 @@ class VpsService:
         idempotency_key: str,
         worker_client: WorkerClient,
         callback_base: str,  # kept for backwards compatibility
+        worker_action: int | None = None,
     ) -> tuple[VpsSession, bool]:
         _ = callback_base  # placeholder – callbacks handled server-to-server
         key = idempotency_key.strip()
@@ -143,8 +135,9 @@ class VpsService:
                 },
             )
 
+        action_to_use = worker_action or product.provision_action
         try:
-            route, log_url = await worker_client.create_vm(worker=worker, action=product.provision_action)
+            route, log_url = await worker_client.create_vm(worker=worker, action=action_to_use)
         except HTTPException:
             # bubble HTTP errors directly to client
             raise
@@ -170,11 +163,27 @@ class VpsService:
         session.worker_route = route
         session.log_url = log_url
         session.status = "provisioning"
+        session.checklist = [
+            {
+                "key": "worker_action",
+                "label": str(action_to_use),
+                "done": True,
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "meta": {"worker_action": action_to_use},
+            }
+        ]
         session.updated_at = datetime.now(timezone.utc)
         self.db.add(session)
         self.db.commit()
 
         if self.event_bus:
+            await self.event_bus.publish(
+                session.id,
+                {
+                    "event": "checklist.update",
+                    "data": {"items": session.checklist},
+                },
+            )
             await self.event_bus.publish(
                 session.id,
                 {
@@ -202,7 +211,7 @@ class VpsService:
             self.db.add(session)
             self.db.commit()
 
-    async def delete_session(self, session: VpsSession, worker_client: WorkerClient) -> None:
+    async def stop_session(self, session: VpsSession, worker_client: WorkerClient) -> None:
         if session.worker_id and session.worker_route:
             worker = self.db.get(Worker, session.worker_id)
             if worker:
@@ -227,6 +236,9 @@ class VpsService:
                     "data": {"status": session.status},
                 },
             )
+
+    async def delete_session(self, session: VpsSession, worker_client: WorkerClient) -> None:
+        await self.stop_session(session, worker_client)
 
     async def fetch_session_log(self, session: VpsSession, worker_client: WorkerClient) -> str:
         if not session.worker_id or not session.worker_route:

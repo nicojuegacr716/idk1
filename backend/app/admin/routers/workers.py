@@ -15,6 +15,7 @@ from app.admin.schemas import (
     WorkerEndpoints,
     WorkerHealthResponse,
     WorkerListItem,
+    WorkerTokenRequest,
     WorkerRegisterRequest,
     WorkerUpdateRequest,
 )
@@ -131,6 +132,39 @@ async def enable_worker(
     context = _audit_context(request, actor)
     worker = service.update_worker(worker_id, status="active", context=context)
     return _dto(worker)
+
+
+@router.post("/workers/{worker_id}/tokens")
+async def request_worker_token(
+    worker_id: UUID,
+    payload: WorkerTokenRequest,
+    actor: User = Depends(require_perm("worker:update")),
+    db: Session = Depends(get_db),
+) -> dict[str, bool]:
+    service = WorkerRegistryService(db)
+    _ = actor  # permission check ensures actor is present
+    worker = service.get_worker(worker_id)
+
+    client = WorkerClient()
+    try:
+        success = await client.add_worker_token(worker=worker, email=payload.email, password=payload.password)
+    except HTTPException:
+        raise
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Worker token request failed: {exc}",
+        ) from exc
+    finally:
+        await client.aclose()
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Worker did not confirm token creation",
+        )
+
+    return {"success": True}
 
 
 @router.get("/workers/{worker_id}", response_model=WorkerDetail)

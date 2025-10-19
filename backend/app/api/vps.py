@@ -52,6 +52,10 @@ def _session_payload(session: VpsSession, *, include_stream: bool = False, reque
         "product": None,
         "worker_id": str(session.worker_id) if session.worker_id else None,
         "has_log": bool(session.worker_route),
+        "worker_route": session.worker_route,
+        "log_url": session.log_url,
+        "provision_action": None,
+        "worker_action": None,
     }
     if session.product:
         payload["product"] = {
@@ -59,12 +63,27 @@ def _session_payload(session: VpsSession, *, include_stream: bool = False, reque
             "name": session.product.name,
             "description": session.product.description,
             "price_coins": session.product.price_coins,
+            "provision_action": session.product.provision_action,
         }
+        payload["provision_action"] = session.product.provision_action
+        payload["worker_action"] = session.product.provision_action
     elif session.product_id:
         payload["product"] = {"id": str(session.product_id)}
     if include_stream and request is not None:
         base_url = str(request.base_url).rstrip('/')
         payload["stream"] = f"{base_url}/vps/sessions/{session.id}/events"
+    if payload["worker_action"] is None:
+        for item in session.checklist or []:
+            meta = item.get("meta") if isinstance(item, dict) else None
+            if not isinstance(meta, dict):
+                continue
+            action_override = meta.get("worker_action")
+            if action_override is not None:
+                try:
+                    payload["worker_action"] = int(action_override)
+                except (TypeError, ValueError):
+                    payload["worker_action"] = action_override
+                break
     if session.status == "ready":
         payload["rdp"] = {
             "host": session.rdp_host,
@@ -89,6 +108,7 @@ async def list_products(
             "description": product.description,
             "price_coins": product.price_coins,
             "is_active": product.is_active,
+            "provision_action": product.provision_action,
         }
         for product in products
     ]
@@ -128,6 +148,25 @@ async def purchase_and_create(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="product_id khng h?p l?") from exc
 
+    worker_action_value: int | None = None
+    raw_action = payload.get("worker_action")
+    if raw_action is not None:
+        try:
+            worker_action_value = int(raw_action)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="worker_action ph?i l? s? nguyen",
+            ) from exc
+    vm_type = str(payload.get("vm_type") or "").strip().lower()
+    if worker_action_value is None and vm_type:
+        mapping = {"linux": 1, "windows": 2, "win": 2, "dummy": 3, "test": 3}
+        if vm_type not in mapping:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="vm_type khng h?p l?")
+        worker_action_value = mapping[vm_type]
+    if worker_action_value is not None and worker_action_value not in {1, 2, 3}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="worker_action khng h?p l?")
+
     service = VpsService(db, event_bus)
     callback_base = str(settings.base_url)
     session, created = await service.purchase_and_create(
@@ -136,6 +175,7 @@ async def purchase_and_create(
         idempotency_key=idempotency_key,
         worker_client=worker_client,
         callback_base=callback_base,
+        worker_action=worker_action_value,
     )
     data = {
         "session": _session_payload(session, include_stream=True, request=request),
@@ -166,6 +206,20 @@ async def delete_session(
     session = service.get_session_for_user(session_id, user)
     await service.delete_session(session, worker_client)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/sessions/{session_id}/stop")
+async def stop_session_endpoint(
+    session_id: UUID,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    worker_client=Depends(get_worker_client),
+) -> JSONResponse:
+    service = VpsService(db)
+    session = service.get_session_for_user(session_id, user)
+    await service.stop_session(session, worker_client)
+    return JSONResponse({"session": _session_payload(session, include_stream=True, request=request)})
 
 
 

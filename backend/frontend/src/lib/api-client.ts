@@ -293,8 +293,27 @@ export const fetchVpsSessions = async (): Promise<VpsSession[]> => {
   return data.sessions ?? [];
 };
 
-export const createVpsSession = async (productId: string, idempotencyKey: string): Promise<VpsSession> => {
-  const payload = JSON.stringify({ product_id: productId });
+type CreateVpsSessionParams = {
+  productId: string;
+  vmType: "linux" | "windows" | "dummy";
+  idempotencyKey: string;
+  workerAction?: number;
+};
+
+export const createVpsSession = async ({
+  productId,
+  vmType,
+  idempotencyKey,
+  workerAction,
+}: CreateVpsSessionParams): Promise<VpsSession> => {
+  const payloadBody: Record<string, unknown> = {
+    product_id: productId,
+    vm_type: vmType,
+  };
+  if (typeof workerAction === "number") {
+    payloadBody.worker_action = workerAction;
+  }
+  const payload = JSON.stringify(payloadBody);
   const headers = {
     "Content-Type": "application/json",
     "Idempotency-Key": idempotencyKey,
@@ -304,6 +323,11 @@ export const createVpsSession = async (productId: string, idempotencyKey: string
     headers,
     body: payload,
   });
+  return data.session;
+};
+
+export const stopVpsSession = async (sessionId: string): Promise<VpsSession> => {
+  const data = await apiFetch<{ session: VpsSession }>(`/vps/sessions/${sessionId}/stop`, { method: "POST" });
   return data.session;
 };
 
@@ -594,6 +618,19 @@ export const enableWorker = async (id: string): Promise<WorkerInfo> => {
 
 export const checkWorkerHealth = async (id: string): Promise<WorkerHealthStatus> => {
   return apiFetch<WorkerHealthStatus>(`/api/v1/admin/workers/${id}/health`, { method: "POST" });
+};
+
+export const requestWorkerToken = async (
+  workerId: string,
+  payload: { email: string; password: string },
+): Promise<boolean> => {
+  const body = JSON.stringify(payload);
+  const data = await apiFetch<{ success: boolean }>(`/api/v1/admin/workers/${workerId}/tokens`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+  });
+  return Boolean(data?.success);
 };
 
 /* VPS products */

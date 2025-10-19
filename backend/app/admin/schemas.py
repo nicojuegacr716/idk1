@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Literal, Optional
 from uuid import UUID
 
-from pydantic import AnyHttpUrl, BaseModel, Field
+from pydantic import AnyHttpUrl, BaseModel, EmailStr, Field
 
 
 class PermissionDTO(BaseModel):
@@ -192,6 +192,11 @@ class WorkerUpdateRequest(BaseModel):
     base_url: AnyHttpUrl | None = None
     status: Literal["active", "disabled"] | None = None
     max_sessions: int | None = Field(default=None, ge=1)
+
+
+class WorkerTokenRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=256)
 
 
 class WorkerListItem(BaseModel):

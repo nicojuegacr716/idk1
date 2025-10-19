@@ -64,6 +64,10 @@ export interface VpsSession {
   stream?: string;
   rdp?: VpsSessionRdp;
   has_log?: boolean;
+  worker_route?: string | null;
+  log_url?: string | null;
+  provision_action?: number | string | null;
+  worker_action?: number | string | null;
 }
 
 export interface AnnouncementAttachment {

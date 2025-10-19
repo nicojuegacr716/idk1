@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { Server, Plus, Trash2, ExternalLink, ListChecks, Loader2, FileText } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Server, Plus, Power, RefreshCw, Loader2, ExternalLink, Terminal, StopCircle } from "lucide-react";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,18 +13,31 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   fetchVpsProducts,
   fetchVpsSessions,
   createVpsSession,
-  deleteVpsSession,
+  stopVpsSession,
   fetchVpsSessionLog,
   ApiError,
 } from "@/lib/api-client";
 import type { VpsProduct, VpsSession } from "@/lib/types";
 import { toast } from "@/components/ui/sonner";
+
+type VmVariant = "linux" | "windows";
+
+const VM_VARIANTS: VmVariant[] = ["linux", "windows"];
+
+const VARIANT_LABELS: Record<VmVariant, string> = {
+  linux: "Linux",
+  windows: "Windows",
+};
+
+const VARIANT_DESCRIPTIONS: Record<VmVariant, string> = {
+  linux: "Headless Ubuntu environment provisioned through worker action 1.",
+  windows: "Windows 10 environment provisioned through worker action 2.",
+};
 
 const idempotencyKey = () => {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -32,36 +46,108 @@ const idempotencyKey = () => {
   return Math.random().toString(36).slice(2);
 };
 
-const statusVariant = (status: string) => {
+const normalizeAction = (raw: unknown): number | null => {
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return raw;
+  }
+  if (typeof raw === "string") {
+    const parsed = Number(raw);
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
+const actionToVariant = (action: number | null | undefined): VmVariant | null => {
+  switch (action) {
+    case 1:
+      return "linux";
+    case 2:
+      return "windows";
+    default:
+      return null;
+  }
+};
+
+const resolveSessionVariant = (session: VpsSession): VmVariant | null => {
+  const action =
+    normalizeAction(session.worker_action) ??
+    normalizeAction(session.provision_action) ??
+    normalizeAction(session.product?.provision_action);
+  return actionToVariant(action);
+};
+
+const workerActionLabel = (session: VpsSession): string => {
+  const variant = resolveSessionVariant(session);
+  if (variant) {
+    return VARIANT_LABELS[variant];
+  }
+  const fallback =
+    normalizeAction(session.worker_action) ??
+    normalizeAction(session.provision_action) ??
+    normalizeAction(session.product?.provision_action);
+  if (fallback === 3) {
+    return "Dummy";
+  }
+  return "Unknown";
+};
+
+const statusBadge = (status: string) => {
   switch (status) {
     case "ready":
       return { variant: "default" as const, className: "bg-success text-success-foreground" };
     case "failed":
       return { variant: "destructive" as const, className: "" };
     case "provisioning":
+    case "pending":
       return { variant: "outline" as const, className: "border-warning text-warning" };
+    case "deleted":
+    case "expired":
+      return { variant: "secondary" as const, className: "bg-muted text-muted-foreground" };
     default:
       return { variant: "secondary" as const, className: "" };
   }
 };
 
-const checklistProgress = (session: VpsSession) => {
-  const total = session.checklist.length || 1;
-  const done = session.checklist.filter((item) => item.done).length;
-  return Math.round((done / total) * 100);
+const formatDateTime = (iso?: string | null) => {
+  if (!iso) return "--";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "--";
+  return date.toLocaleString();
 };
 
-const humanizeChecklistLabel = (label: string | null) => {
-  if (!label) return "Mục kiểm tra";
-  return label.charAt(0).toUpperCase() + label.slice(1);
+const computeRefetchInterval = (session: VpsSession): number | false => {
+  if (!session.has_log || !session.worker_route) {
+    return false;
+  }
+  const status = session.status;
+  if (status === "deleted" || status === "failed" || status === "expired") {
+    return false;
+  }
+  if (status === "ready") {
+    return 15000;
+  }
+  if (status === "provisioning" || status === "pending") {
+    return 4000;
+  }
+  return 8000;
+};
+
+const useSessionLog = (session: VpsSession) => {
+  const enabled = Boolean(session.has_log && session.worker_route);
+  return useQuery({
+    queryKey: ["vps-session-log", session.id],
+    queryFn: () => fetchVpsSessionLog(session.id),
+    enabled,
+    refetchInterval: () => computeRefetchInterval(session),
+    retry: false,
+  });
 };
 
 export default function VPS() {
-  const [selectedProduct, setSelectedProduct] = useState<VpsProduct | null>(null);
-  const [logDialogOpen, setLogDialogOpen] = useState(false);
-  const [logContent, setLogContent] = useState("");
-  const [logSession, setLogSession] = useState<VpsSession | null>(null);
-  const [logError, setLogError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const [selectedVariant, setSelectedVariant] = useState<VmVariant | null>(null);
 
   const {
     data: products = [],
@@ -82,288 +168,393 @@ export default function VPS() {
     staleTime: 10_000,
   });
 
+  const variantProducts = useMemo(() => {
+    const mapping: Record<VmVariant, VpsProduct | null> = {
+      linux: null,
+      windows: null,
+    };
+    for (const product of products) {
+      const action = normalizeAction(product.provision_action);
+      const variant = actionToVariant(action);
+      if (variant && !mapping[variant]) {
+        mapping[variant] = product;
+      }
+    }
+    return mapping;
+  }, [products]);
+
+  const sortedSessions = useMemo(() => {
+    const priority = (status: string) => {
+      switch (status) {
+        case "provisioning":
+        case "pending":
+          return 0;
+        case "ready":
+          return 1;
+        case "failed":
+          return 2;
+        case "expired":
+          return 3;
+        case "deleted":
+          return 4;
+        default:
+          return 5;
+      }
+    };
+    return [...sessions].sort((a, b) => {
+      const diff = priority(a.status) - priority(b.status);
+      if (diff !== 0) return diff;
+      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return bTime - aTime;
+    });
+  }, [sessions]);
+
   const createSession = useMutation({
-    mutationFn: (productId: string) => createVpsSession(productId, idempotencyKey()),
-    onSuccess: () => {
+    mutationFn: ({ variant, productId }: { variant: VmVariant; productId: string }) =>
+      createVpsSession({
+        productId,
+        vmType: variant,
+        idempotencyKey: idempotencyKey(),
+      }),
+    onSuccess: (session) => {
+      toast("Provisioning request sent to worker.");
+      setSelectedVariant(null);
       refetchSessions();
+      queryClient.invalidateQueries({ queryKey: ["vps-sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["vps-session-log", session.id] });
     },
     onError: (error: unknown) => {
       if (error instanceof ApiError && error.status === 400) {
-        const detail = (error.data as { detail?: string })?.detail ?? "Số dư không đủ.";
+        const detail = (error.data as { detail?: string })?.detail ?? "Provisioning failed.";
         toast(detail);
         return;
       }
-      const message = error instanceof Error ? error.message : "Tạo phiên thất bại.";
+      const message = error instanceof Error ? error.message : "Unable to provision VPS.";
       toast(message);
     },
   });
 
-  const removeSession = useMutation({
-    mutationFn: deleteVpsSession,
-    onSuccess: () => {
+  const stopSession = useMutation({
+    mutationFn: stopVpsSession,
+    onSuccess: (session) => {
+      toast("Stop command sent to worker.");
       refetchSessions();
-    },
-  });
-
-  const logViewer = useMutation({
-    mutationFn: fetchVpsSessionLog,
-    onSuccess: (body: string) => {
-      setLogContent(body);
-      setLogError(null);
+      queryClient.invalidateQueries({ queryKey: ["vps-sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["vps-session-log", session.id] });
     },
     onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : "Không tải được nhật ký VPS.";
-      setLogError(message);
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "Unable to stop session.";
+      toast(message);
     },
   });
 
-  const handleViewLogs = (session: VpsSession) => {
-    setLogSession(session);
-    setLogContent("");
-    setLogError(null);
-    setLogDialogOpen(true);
-    logViewer.mutate(session.id);
-  };
-
-  const handleCloseLogDialog = (open: boolean) => {
-    setLogDialogOpen(open);
-    if (!open) {
-      setLogSession(null);
-      setLogContent("");
-      setLogError(null);
-      logViewer.reset();
+  const handleLaunch = () => {
+    if (!selectedVariant) return;
+    const product = variantProducts[selectedVariant];
+    if (!product) {
+      toast("No product configured for this variant.");
+      return;
     }
+    createSession.mutate({ variant: selectedVariant, productId: product.id });
   };
-
-  const activeSessions = useMemo(() => sessions.filter((session) => !["deleted"].includes(session.status)), [sessions]);
 
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Quản lý VPS</h1>
+          <h1 className="text-3xl font-bold mb-2">VPS Control</h1>
           <p className="text-muted-foreground">
-            Tạo và theo dõi phiên VPS theo thời gian thực ngay tại đây.
+            Launch, monitor, and stop worker-provisioned VPS sessions from a single panel.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="w-4 h-4" />
-                Tạo VPS
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="glass-panel max-w-4xl">
-              <DialogHeader>
-                <DialogTitle>Chọn gói VPS</DialogTitle>
-                <DialogDescription>Danh sách gói được cập nhật từ hệ thống. Chọn gói để khởi chạy.</DialogDescription>
-              </DialogHeader>
-              <div className="mt-4 grid gap-4 md:grid-cols-3">
-                {productsLoading && <p className="text-sm text-muted-foreground px-4">Đang tải gói...</p>}
-                {!productsLoading && products.length === 0 && (
-                  <p className="text-sm text-muted-foreground px-4">
-                    Hiện chưa có gói khả dụng. Vui lòng quay lại sau.
-                  </p>
-                )}
-                {products.map((product) => (
-                  <Card
-                    key={product.id}
-                    className={`glass-card cursor-pointer transition-all ${
-                      selectedProduct?.id === product.id ? "ring-2 ring-primary" : ""
-                    }`}
-                    onClick={() => setSelectedProduct(product)}
-                  >
-                    <CardHeader>
-                      <CardTitle className="text-lg">{product.name}</CardTitle>
-                      <CardDescription className="text-xs">{product.description || "Tài nguyên VPS quản lý"}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-warning">
-                        {product.price_coins.toLocaleString()} <span className="text-sm text-muted-foreground">coin</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-              <div className="flex justify-end gap-3 mt-6">
-                <Button variant="outline" onClick={() => setSelectedProduct(null)}>
-                  Hủy
-                </Button>
-                <Button
-                  onClick={() => selectedProduct && createSession.mutate(selectedProduct.id)}
-                  disabled={!selectedProduct || createSession.isPending}
-                >
-                  {createSession.isPending ? "Đang khởi chạy..." : "Khởi chạy VPS"}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-xl font-semibold">Phiên của bạn</h2>
-          <p className="text-sm text-muted-foreground">
-            Xem tiến độ, trạng thái và thông tin kết nối khi sẵn sàng.
-          </p>
-        </div>
-
-        {sessionsLoading && <p className="text-sm text-muted-foreground">Đang tải danh sách phiên...</p>}
-
-        {!sessionsLoading && activeSessions.length === 0 && (
-          <Card className="glass-card">
-            <CardHeader>
-              <CardTitle>Chưa có phiên nào</CardTitle>
-              <CardDescription>Tạo một phiên mới để bắt đầu sử dụng VPS.</CardDescription>
-            </CardHeader>
-          </Card>
-        )}
-
-        {!sessionsLoading &&
-          activeSessions.map((session) => {
-            const progress = checklistProgress(session);
-            const status = statusVariant(session.status);
-            return (
-              <Card key={session.id} className="glass-card hover-lift">
-                <CardContent className="space-y-4 p-6">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                        <Server className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-lg">
-                          {session.product?.name || "Phiên VPS"}
-                        </h3>
-                        <p className="text-xs text-muted-foreground">Mã phiên: {session.id}</p>
-                      </div>
-                    </div>
-                    <Badge variant={status.variant} className={status.className}>
-                      {session.status.toUpperCase()}
-                    </Badge>
-                  </div>
-
-                  <div>
-                    <Progress value={progress} className="h-2 mb-3" />
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <ListChecks className="w-4 h-4" />
-                      <span>
-                        Hoàn thành {progress}% • Cập nhật lần cuối{" "}
-                        {session.updated_at ? new Date(session.updated_at).toLocaleString() : "không rõ"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <Checklist session={session} />
-                    <ConnectionDetails session={session} />
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 justify-end">
-                    {session.stream && (
-                      <Button variant="outline" size="sm" asChild>
-                        <a href={session.stream} target="_blank" rel="noreferrer">
-                          <ExternalLink className="w-4 h-4 mr-2" />
-                          Xem dòng sự kiện
-                        </a>
-                      </Button>
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2"
-                      disabled={!session.has_log || (logViewer.isPending && logSession?.id === session.id)}
-                      onClick={() => handleViewLogs(session)}
+        <Dialog onOpenChange={(open) => { if (!open) setSelectedVariant(null); }}>
+          <DialogTrigger asChild>
+            <Button className="gap-2">
+              <Plus className="w-4 h-4" />
+              Launch VPS
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="glass-panel max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Select operating system</DialogTitle>
+              <DialogDescription>Choose which worker action to trigger for the new VPS session.</DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              {productsLoading && (
+                <p className="col-span-2 px-2 text-sm text-muted-foreground">Loading products…</p>
+              )}
+              {!productsLoading &&
+                VM_VARIANTS.map((variant) => {
+                  const product = variantProducts[variant];
+                  const isSelected = selectedVariant === variant;
+                  const isDisabled = !product;
+                  return (
+                    <Card
+                      key={variant}
+                      role="button"
+                      tabIndex={isDisabled ? -1 : 0}
+                      className={`glass-card transition-all ${
+                        isSelected ? "ring-2 ring-primary" : ""
+                      } ${isDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                      onClick={() => {
+                        if (isDisabled) return;
+                        setSelectedVariant(variant);
+                      }}
                     >
-                      {logViewer.isPending && logSession?.id === session.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <FileText className="w-4 h-4" />
-                      )}
-                      Xem nhật ký
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="gap-2"
-                      onClick={() => removeSession.mutate(session.id)}
-                      disabled={removeSession.isPending && removeSession.variables === session.id}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      {removeSession.isPending && removeSession.variables === session.id ? "Đang xóa..." : "Xóa"}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-      </div>
-
-      <Dialog open={logDialogOpen} onOpenChange={handleCloseLogDialog}>
-        <DialogContent className="max-w-3xl glass-card">
-          <DialogHeader>
-            <DialogTitle>Nhật ký cài đặt</DialogTitle>
-            <DialogDescription>
-              {logSession ? `Phiên ${logSession.id}` : "Chi tiết quá trình khởi tạo từ dịch vụ hệ thống."}
-            </DialogDescription>
-          </DialogHeader>
-          {logViewer.isPending && (
-            <div className="flex items-center justify-center py-12 text-muted-foreground">
-              <Loader2 className="w-5 h-5 animate-spin mr-2" />
-              Đang tải nhật ký...
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-lg">
+                          <Server className="w-4 h-4" />
+                          {VARIANT_LABELS[variant]}
+                        </CardTitle>
+                        <CardDescription className="text-xs">{VARIANT_DESCRIPTIONS[variant]}</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        {product ? (
+                          <div className="text-2xl font-semibold">
+                            {product.price_coins.toLocaleString()}{" "}
+                            <span className="text-sm text-muted-foreground">coins</span>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">No product configured.</p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
             </div>
-          )}
-          {!logViewer.isPending && logError && (
-            <p className="text-sm text-destructive">{logError}</p>
-          )}
-          {!logViewer.isPending && !logError && (
-            <ScrollArea className="max-h-[420px] rounded-md border border-border/40 bg-muted/30">
-              <pre className="p-4 text-xs font-mono whitespace-pre-wrap">{logContent || "Chưa có nội dung nhật ký."}</pre>
-            </ScrollArea>
-          )}
-        </DialogContent>
-      </Dialog>
+            <div className="mt-6 flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setSelectedVariant(null)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleLaunch}
+                disabled={!selectedVariant || !variantProducts[selectedVariant] || createSession.isPending}
+                className="gap-2"
+              >
+                {createSession.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Provisioning…
+                  </>
+                ) : (
+                  "Launch"
+                )}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {sessionsLoading && (
+        <Card className="glass-card">
+          <CardContent className="flex items-center gap-2 py-10">
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Loading sessions…</span>
+          </CardContent>
+        </Card>
+      )}
+
+      {!sessionsLoading && sortedSessions.length === 0 && (
+        <Card className="glass-card">
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            No VPS sessions yet. Launch one to see worker activity.
+          </CardContent>
+        </Card>
+      )}
+
+      {!sessionsLoading &&
+        sortedSessions.map((session) => {
+          const isStopping = stopSession.isPending && stopSession.variables === session.id;
+          return (
+            <SessionCard
+              key={session.id}
+              session={session}
+              onStop={() => stopSession.mutate(session.id)}
+              isStopping={isStopping}
+            />
+          );
+        })}
     </div>
   );
 }
 
-const Checklist = ({ session }: { session: VpsSession }) => (
-  <div className="rounded-lg border border-border/40 p-4 space-y-2">
-    <p className="text-sm font-semibold flex items-center gap-2">
-      <ListChecks className="w-4 h-4" />
-      Danh sách kiểm tra
-    </p>
-    {session.checklist.length === 0 && <p className="text-xs text-muted-foreground">Chưa có mục kiểm tra.</p>}
-    {session.checklist.map((item) => (
-      <div key={item.key ?? Math.random()} className="flex items-center justify-between text-xs">
-        <span className={item.done ? "text-foreground" : "text-muted-foreground"}>
-          {humanizeChecklistLabel(item.label)}
-        </span>
-        <span className={`font-medium ${item.done ? "text-success" : "text-muted-foreground"}`}>
-          {item.done ? "Hoàn tất" : "Đang xử lý"}
-        </span>
-      </div>
-    ))}
+type SessionCardProps = {
+  session: VpsSession;
+  onStop: () => void;
+  isStopping: boolean;
+};
+
+const SessionCard = ({ session, onStop, isStopping }: SessionCardProps) => {
+  const logQuery = useSessionLog(session);
+  const status = statusBadge(session.status);
+  const variantLabel = workerActionLabel(session);
+  const canStop = !["deleted", "failed", "expired"].includes(session.status);
+
+  return (
+    <Card className="glass-card">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Power className="w-4 h-4 text-primary" />
+              {variantLabel}
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Session {session.id}
+              {session.product?.name ? ` · ${session.product.name}` : ""}
+            </CardDescription>
+          </div>
+          <Badge variant={status.variant} className={status.className}>
+            {session.status.toUpperCase()}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+          <div className="space-y-4 text-sm">
+            <div className="space-y-2">
+              <InfoRow label="Worker route" value={session.worker_route ?? "--"} />
+              <InfoRow label="Created" value={formatDateTime(session.created_at)} />
+              <InfoRow label="Updated" value={formatDateTime(session.updated_at)} />
+              <InfoRow label="Log endpoint" value={session.log_url ?? "Not assigned"} />
+            </div>
+            {session.status === "ready" && session.rdp && <ConnectionDetails session={session} />}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="destructive"
+                size="sm"
+                className="gap-2"
+                onClick={onStop}
+                disabled={!canStop || isStopping}
+              >
+                {isStopping ? <Loader2 className="w-4 h-4 animate-spin" /> : <StopCircle className="w-4 h-4" />}
+                {isStopping ? "Stopping…" : "Stop session"}
+              </Button>
+              {session.log_url && (
+                <Button variant="outline" size="sm" className="gap-2" asChild>
+                  <a href={session.log_url} target="_blank" rel="noreferrer">
+                    <ExternalLink className="w-4 h-4" />
+                    Open worker log
+                  </a>
+                </Button>
+              )}
+            </div>
+          </div>
+          <SessionLogPanel session={session} query={logQuery} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+const InfoRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex flex-col">
+    <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
+    <span className="break-all text-sm font-medium">{value}</span>
   </div>
 );
 
-const ConnectionDetails = ({ session }: { session: VpsSession }) => (
-  <div className="rounded-lg border border-border/40 p-4 space-y-2">
-    <p className="text-sm font-semibold">Thông tin kết nối</p>
-    {session.status !== "ready" && (
-      <p className="text-xs text-muted-foreground">
-        Thông tin đăng nhập RDP sẽ xuất hiện khi phiên sẵn sàng.
-      </p>
-    )}
-    {session.status === "ready" && session.rdp && (
-      <div className="text-xs space-y-1">
-        <div>Máy chủ: <span className="font-mono">{session.rdp.host}</span></div>
-        <div>Cổng: <span className="font-mono">{session.rdp.port}</span></div>
-        <div>Tài khoản: <span className="font-mono">{session.rdp.user}</span></div>
-        <div>Mật khẩu: <span className="font-mono">{session.rdp.password}</span></div>
+const ConnectionDetails = ({ session }: { session: VpsSession }) => {
+  const rdp = session.rdp;
+  if (!rdp) return null;
+
+  const { host, port, user, password } = rdp;
+  if (!host && !port && !user && !password) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-1 rounded-lg border border-border/40 bg-muted/30 p-3 text-xs">
+      <p className="text-sm font-semibold">RDP credentials</p>
+      {host && (
+        <div>
+          Host: <span className="font-mono">{host}</span>
+        </div>
+      )}
+      {port && (
+        <div>
+          Port: <span className="font-mono">{port}</span>
+        </div>
+      )}
+      {user && (
+        <div>
+          User: <span className="font-mono">{user}</span>
+        </div>
+      )}
+      {password && (
+        <div>
+          Password: <span className="font-mono">{password}</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+type SessionLogPanelProps = {
+  session: VpsSession;
+  query: ReturnType<typeof useSessionLog>;
+};
+
+const SessionLogPanel = ({ session, query }: SessionLogPanelProps) => {
+  const hasLog = Boolean(session.has_log && session.worker_route);
+  const autoRefresh = computeRefetchInterval(session);
+  let content: ReactNode;
+
+  if (!hasLog) {
+    content = <p className="text-xs text-muted-foreground">Worker has not exposed a log yet.</p>;
+  } else if (query.isLoading) {
+    content = (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Fetching log…
       </div>
-    )}
-  </div>
-);
+    );
+  } else if (query.isError) {
+    const message =
+      query.error instanceof ApiError
+        ? query.error.message
+        : query.error instanceof Error
+          ? query.error.message
+          : "Unable to load log.";
+    content = <p className="text-xs text-destructive">{message}</p>;
+  } else {
+    const text = query.data ?? "";
+    content = (
+      <pre className="text-xs font-mono whitespace-pre-wrap leading-relaxed">{text || "(empty log)"}</pre>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-semibold">
+          <Terminal className="w-4 h-4" />
+          Worker log
+        </p>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-2"
+          onClick={() => query.refetch()}
+          disabled={!hasLog || query.isFetching}
+        >
+          {query.isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          Refresh
+        </Button>
+      </div>
+      <ScrollArea className="h-[260px] rounded-md border border-border/40 bg-muted/20">
+        <div className="p-4">{content}</div>
+      </ScrollArea>
+      <p className="text-[10px] text-muted-foreground">
+        {autoRefresh ? `Auto refresh every ${Math.round(autoRefresh / 1000)}s.` : "Auto refresh disabled."}
+      </p>
+    </div>
+  );
+};
+
