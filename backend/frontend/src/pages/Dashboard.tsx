@@ -116,7 +116,7 @@ export default function Dashboard() {
       accent: "text-primary",
     },
     {
-      title: "Số dư coin",
+      title: "Số dư",
       value: formatCoins(profile?.coins ?? 0),
       description: "Trong ví tài khoản của bạn",
       icon: Zap,

@@ -39,8 +39,9 @@ export function Header() {
     queryFn: fetchAnnouncements,
     staleTime: 60_000,
   });
-  const displayName = profile?.display_name || profile?.username || "User";
-  const email = profile?.email ?? "No email connected";
+
+  const displayName = profile?.display_name || profile?.username || "Người dùng";
+  const email = profile?.email ?? "Chưa liên kết email";
   const coins = profile?.coins ?? 0;
 
   return (
@@ -52,20 +53,20 @@ export function Header() {
           <div className="flex items-center gap-2 px-4 py-2 rounded-lg glass-card">
             <Coins className="w-4 h-4 text-warning" />
             <span className="text-sm font-semibold">{coins}</span>
-            <span className="text-xs text-muted-foreground">coins</span>
+            <span className="text-xs text-muted-foreground">xu</span>
           </div>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
+              <Button variant="ghost" size="icon" className="relative" aria-label="Thông báo">
                 <Bell className="w-5 h-5" />
                 {announcements.length > 0 && (<span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-primary"></span>)}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-72 glass-panel space-y-2">
-              <DropdownMenuLabel className="text-xs uppercase tracking-wide text-muted-foreground">Announcements</DropdownMenuLabel>
+              <DropdownMenuLabel className="text-xs uppercase tracking-wide text-muted-foreground">Thông báo</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {announcements.length === 0 && (<p className="px-2 pb-2 text-xs text-muted-foreground">No announcements at the moment.</p>)}
+              {announcements.length === 0 && (<p className="px-2 pb-2 text-xs text-muted-foreground">Chưa có thông báo nào.</p>)}
               {announcements.map((item) => (
                 <DropdownMenuItem
                   key={item.id}
@@ -82,12 +83,12 @@ export function Header() {
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate("/announcements")}>View all announcements</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/announcements")}>Xem tất cả</DropdownMenuItem>
               {hasAdminAccess && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => navigate("/admin/announcements")}>
-                    Manage announcements
+                    Quản lý thông báo
                   </DropdownMenuItem>
                 </>
               )}
@@ -116,20 +117,20 @@ export function Header() {
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => navigate("/profile")}>
                 <User className="mr-2 h-4 w-4" />
-                My Profile
+                Hồ sơ của tôi
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate("/announcements")}>
                 <Megaphone className="mr-2 h-4 w-4" />
-                Announcements
+                Thông báo
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate("/support")}>
                 <MessageSquare className="mr-2 h-4 w-4" />
-                Support
+                Hỗ trợ
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive" onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
-                Log out
+                Đăng xuất
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
