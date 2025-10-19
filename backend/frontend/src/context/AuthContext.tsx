@@ -38,7 +38,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const profile = profileQuery.data ?? null;
   const adminQueryKey = useMemo(() => ["admin-user"] as const, []);
-  const hasAdminRole = Boolean(profile?.is_admin);
+  const hasAdminRole = Boolean(profile?.is_admin || profile?.has_admin);
 
   const adminQuery = useQuery({
     queryKey: adminQueryKey,

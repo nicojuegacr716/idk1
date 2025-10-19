@@ -46,6 +46,7 @@ class User(Base):
     avatar_url = Column(String(500), nullable=True)
     phone_number = Column(String(50), nullable=True)
     coins = Column(Integer, nullable=False, server_default="0", default=0)
+    has_admin = Column(Boolean, nullable=False, server_default=text("0"), default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False

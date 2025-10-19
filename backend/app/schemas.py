@@ -13,6 +13,7 @@ class UserProfile(BaseModel):
     coins: int = 0
     roles: list[str] = []
     is_admin: bool = False
+    has_admin: bool = False
 
 
 class AssetUploadResponse(BaseModel):

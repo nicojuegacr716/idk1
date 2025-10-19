@@ -207,12 +207,20 @@ def grant_role_to_user(db: Session, user: User, role_name: str) -> None:
     role = db.scalar(select(Role).where(Role.name == role_name))
     if not role:
         return
+    is_admin_role = role_name.lower() == "admin"
     exists = db.scalar(
         select(UserRole).where(UserRole.user_id == user.id, UserRole.role_id == role.id)
     )
     if exists:
+        if is_admin_role and hasattr(user, "has_admin") and not getattr(user, "has_admin", False):
+            user.has_admin = True
+            db.add(user)
+            db.commit()
         return
     db.add(UserRole(user_id=user.id, role_id=role.id))
+    if is_admin_role and hasattr(user, "has_admin") and not getattr(user, "has_admin", False):
+        user.has_admin = True
+        db.add(user)
     db.commit()
 
 

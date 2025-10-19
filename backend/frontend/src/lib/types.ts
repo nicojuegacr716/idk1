@@ -8,6 +8,7 @@ export interface UserProfile {
   coins: number;
   roles: string[];
   is_admin: boolean;
+  has_admin?: boolean;
 }
 
 export interface AssetUploadResponse {
