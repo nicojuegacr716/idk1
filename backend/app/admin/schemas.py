@@ -62,6 +62,7 @@ class AdminUser(UserSummary):
     phone_number: str | None = None
     coins: int
     roles: list[RoleSummary] = Field(default_factory=list)
+    has_admin: bool = False
 
 
 class AdminUserListItem(BaseModel):

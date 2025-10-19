@@ -49,6 +49,7 @@ def _map_user(user: User, roles: Sequence[RoleSummary]) -> AdminUser:
         phone_number=user.phone_number,
         coins=user.coins or 0,
         roles=list(roles),
+        has_admin=bool(getattr(user, "has_admin", False)),
     )
 
 
