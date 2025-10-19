@@ -104,6 +104,8 @@ def require_admin_user(
     cache: PermissionCache = Depends(get_permission_cache),
     _: None = Depends(rate_limit_dependency),
 ) -> User:
+    if not db.in_transaction():
+        current_user = db.merge(current_user)
     settings: AdminSettings = get_admin_settings()
     if not settings.enabled:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin module disabled.")
