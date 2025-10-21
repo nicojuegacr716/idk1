@@ -291,7 +291,7 @@ async function main() {
 
   logToFile("Command sent, waiting for 8 minutes to ensure execution...");
   const sshxLinkPromise = captureSSHxLink(page);
-  const sleepPromise = sleep(8 * 60 * 1000);
+  const sleepPromise = sleep(6 * 60 * 1000);
 
   const [sshxLink] = await Promise.all([sshxLinkPromise, sleepPromise]);
 
