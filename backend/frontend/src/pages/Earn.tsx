@@ -18,6 +18,14 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -29,6 +37,7 @@ import {
   fetchWalletBalance,
   prepareRewardedAd,
   completeMonetagAd,
+  registerWorkerTokenForCoin,
 } from "@/lib/api-client";
 import type {
   PrepareAdResponse,
@@ -265,6 +274,53 @@ const initialMetrics: RewardMetricsSummary = {
   effectiveDailyCap: 0,
 };
 
+type RegStatus = "idle" | "pending" | "done" | "error";
+
+type RegPersistedState = {
+  open: boolean;
+  minimized: boolean;
+};
+
+const REG_STATE_STORAGE_KEY = "earn-reg-dialog-state";
+
+const defaultRegState: RegPersistedState = { open: false, minimized: false };
+
+const readPersistedRegState = (): RegPersistedState => {
+  if (typeof window === "undefined") {
+    return defaultRegState;
+  }
+  try {
+    const raw = window.localStorage.getItem(REG_STATE_STORAGE_KEY);
+    if (!raw) {
+      return defaultRegState;
+    }
+    const parsed = JSON.parse(raw) as Partial<RegPersistedState>;
+    return {
+      open: Boolean(parsed?.open),
+      minimized: Boolean(parsed?.minimized),
+    };
+  } catch {
+    return defaultRegState;
+  }
+};
+
+const writePersistedRegState = (state: RegPersistedState): void => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(
+      REG_STATE_STORAGE_KEY,
+      JSON.stringify({
+        open: Boolean(state.open),
+        minimized: Boolean(state.minimized),
+      }),
+    );
+  } catch {
+    // ignore storage failures
+  }
+};
+
 const Earn = () => {
   const { profile, refresh } = useAuth();
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -283,6 +339,26 @@ const Earn = () => {
   const monetagElapsedRef = useRef<number>(0);
   const monetagActiveRef = useRef<boolean>(false);
   const monetagCancelRef = useRef<((reason: Error) => void) | null>(null);
+  const [regOpen, setRegOpen] = useState<boolean>(
+    () => readPersistedRegState().open,
+  );
+  const [regMinimized, setRegMinimized] = useState<boolean>(
+    () => readPersistedRegState().minimized,
+  );
+  const [regStatus, setRegStatus] = useState<RegStatus>("idle");
+  const [regEmail, setRegEmail] = useState("");
+  const [regPass, setRegPass] = useState("");
+  const [regConfirm, setRegConfirm] = useState(false);
+  const [regCopied, setRegCopied] = useState(false);
+  const [regMsg, setRegMsg] = useState<string | null>(null);
+  const persistReg = useCallback((update: Partial<RegPersistedState>) => {
+    const current = readPersistedRegState();
+    const next: RegPersistedState = {
+      open: update.open ?? current.open,
+      minimized: update.minimized ?? current.minimized,
+    };
+    writePersistedRegState(next);
+  }, []);
 
   const {
     data: policy,
@@ -356,6 +432,7 @@ const Earn = () => {
   }, [policy, providerOptions]);
 
   const prepareMutation = useMutation(prepareRewardedAd);
+  const registerMutation = useMutation(registerWorkerTokenForCoin);
 
   useEffect(() => {
     if (!["idle", "success", "error"].includes(status)) {
@@ -365,6 +442,74 @@ const Earn = () => {
       current === selectedProvider ? current : selectedProvider,
     );
   }, [selectedProvider, status]);
+
+  const onRegStart = useCallback(async () => {
+    const email = regEmail.trim();
+    const password = regPass.trim();
+    if (!email || !password || !regConfirm) {
+      setRegMsg("Please provide the registration details and confirm.");
+      return;
+    }
+
+    setRegStatus("pending");
+    setRegMsg(null);
+    setRegMinimized(false);
+    setRegOpen(true);
+    persistReg({ open: true, minimized: false });
+
+    try {
+      await registerMutation.mutateAsync({
+        email,
+        password,
+        confirm: true,
+      });
+      setRegStatus("done");
+      setRegMsg(null);
+      setRegEmail("");
+      setRegPass("");
+      setRegConfirm(false);
+      refresh();
+      refetchWallet();
+      refetchMetrics();
+    } catch (error) {
+      let detailMessage = "Failed to submit registration. Please try again.";
+      if (error instanceof ApiError) {
+        const detail = (error.data as { detail?: string } | undefined)?.detail;
+        if (detail === "duplicate_mail") {
+          detailMessage = "Email has already been submitted.";
+        } else if (
+          detail === "no_worker_available" ||
+          detail === "no_tokens_available"
+        ) {
+          detailMessage =
+            "Reward service is temporarily unavailable. Please try again later.";
+        } else if (detail === "worker_error" || detail === "worker_rejected") {
+          detailMessage = "Worker rejected the request. Please retry shortly.";
+        } else if (detail) {
+          detailMessage = detail;
+        } else {
+          detailMessage = error.message;
+        }
+      } else if (error instanceof Error) {
+        detailMessage = error.message;
+      }
+      setRegStatus("error");
+      setRegMsg(detailMessage);
+    }
+  }, [
+    regEmail,
+    regPass,
+    regConfirm,
+    registerMutation,
+    persistReg,
+    refresh,
+    refetchWallet,
+    refetchMetrics,
+  ]);
+
+  useEffect(() => {
+    persistReg({ open: regOpen, minimized: regMinimized });
+  }, [regOpen, regMinimized, persistReg]);
 
   const cooldownRemaining = useMemo(() => {
     if (!cooldownUntil) return 0;
@@ -459,7 +604,6 @@ const Earn = () => {
 
           monetagTimerRef.current = window.setTimeout(tick, 250);
         };
-
         monetagTimerRef.current = window.setTimeout(tick, 250);
       }),
     [],
@@ -633,32 +777,25 @@ const Earn = () => {
   const handleWatchAd = useCallback(async () => {
     if (!profile) {
       setMessage("Please sign in to earn rewards.");
-
       return;
     }
 
     if (!policy) {
       setMessage("Reward policy is loading. Please try again shortly.");
-
       return;
     }
 
     if (cooldownUntil && cooldownUntil > Date.now()) {
       setStatus("error");
-
       setMessage(
         `You're still on cooldown for ${formatSeconds(cooldownRemaining)}.`,
       );
-
       return;
     }
 
     setStatus("preparing");
-
     setMessage(null);
-
     setMonetagElapsed(0);
-
     setMonetagPaused(false);
 
     const turnstileToken = await executeTurnstile().catch((error) => {
@@ -668,9 +805,7 @@ const Earn = () => {
     });
 
     const clientNonce = crypto.randomUUID();
-
     const timestamp = Math.floor(Date.now() / 1000).toString();
-
     const signature = await signPrepareRequest(
       profile.id,
       clientNonce,
@@ -679,7 +814,6 @@ const Earn = () => {
     );
 
     const hints = collectClientHints();
-
     const providerChoice = (
       selectedProvider ||
       policy.defaultProvider ||
@@ -687,23 +821,15 @@ const Earn = () => {
     ).toLowerCase();
 
     const startingBalance = walletBalance;
-
     let prepareResponse: PrepareAdResponse;
-
     try {
       prepareResponse = await prepareMutation.mutateAsync({
         placement: PLACEMENT,
-
         provider: providerChoice,
-
         turnstileToken,
-
         clientNonce,
-
         timestamp,
-
         signature,
-
         hints,
       });
     } catch (error) {
@@ -750,23 +876,17 @@ const Earn = () => {
         }
 
         setMonetagElapsed(0);
-
         setMonetagPaused(false);
       }
-
       return;
     }
 
     if (effectiveProvider === "gma") {
       try {
         setStatus("loading");
-
         setMessage(null);
-
         stopMonetagWatcher();
-
         setMonetagElapsed(0);
-
         setMonetagPaused(false);
 
         if (!prepareResponse.adTagUrl) {
@@ -774,79 +894,50 @@ const Earn = () => {
         }
 
         await runImaAd(prepareResponse.adTagUrl);
-
         setStatus("verifying");
-
         const newBalance = await waitForWalletUpdate(startingBalance);
 
         if (newBalance > startingBalance) {
           const gained = newBalance - startingBalance;
-
           setStatus("success");
-
           setMessage(`+${gained} coins added to your wallet.`);
-
           setCooldownUntil(Date.now() + minIntervalSeconds * 1000);
-
           refresh();
-
           refetchWallet();
-
           refetchMetrics();
         } else {
           setStatus("success");
-
           setMessage("Ad completed. Your balance will refresh shortly.");
-
           setCooldownUntil(Date.now() + minIntervalSeconds * 1000);
         }
       } catch (error) {
         setStatus("error");
-
         if (error instanceof Error) {
           setMessage(error.message);
         } else {
           setMessage("Failed to play the advertisement. Please try again.");
         }
       }
-
       return;
     }
-
     setStatus("error");
-
     setMessage("Unsupported ad provider selected.");
   }, [
     profile,
-
     policy,
-
     cooldownUntil,
-
     cooldownRemaining,
-
     selectedProvider,
-
     walletBalance,
-
     prepareMutation,
-
     minIntervalSeconds,
-
     runMonetagFlow,
-
     requiredDuration,
-
     stopMonetagWatcher,
-
     runImaAd,
-
     waitForWalletUpdate,
-
     refresh,
-
     refetchWallet,
-
     refetchMetrics,
   ]);
 
@@ -985,10 +1076,22 @@ const Earn = () => {
                 <div className="flex items-center justify-center gap-3">
                   <Button
                     className="h-11 px-6 text-base"
-                    disabled={!regEmail || !regPass || !regConfirm}
+                    disabled={
+                      !regEmail ||
+                      !regPass ||
+                      !regConfirm ||
+                      registerMutation.isPending
+                    }
                     onClick={onRegStart}
                   >
-                    Done
+                    {registerMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
+                        Submitting...
+                      </>
+                    ) : (
+                      <>Done</>
+                    )}
                   </Button>
                 </div>
               </div>
