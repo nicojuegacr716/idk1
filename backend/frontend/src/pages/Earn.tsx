@@ -482,13 +482,13 @@ const Earn = () => {
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         {/* Reg Account For Coin card */}
-        <Card className="glass-card">
+        <Card className="glass-card h-fit max-w-md lg:col-start-2 lg:ml-auto">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle>Reg Account For Coin</CardTitle>
-              <CardDescription>Tạo tài khoản mới để nhận +15 xu</CardDescription>
+              <CardTitle className="text-base font-semibold">Reg Account For Coin</CardTitle>
+              <CardDescription className="text-xs">Tạo tài khoản mới để nhận +15 xu</CardDescription>
             </div>
-            <Button variant="secondary" onClick={() => { setRegOpen(true); setRegMinimized(false); persistReg({ open: true, minimized: false }); }}>
+            <Button size="sm" variant="secondary" className="text-sm" onClick={() => { setRegOpen(true); setRegMinimized(false); persistReg({ open: true, minimized: false }); }}>
               <MoreHorizontal className="mr-2 h-4 w-4" /> More
             </Button>
           </CardHeader>
@@ -505,55 +505,57 @@ const Earn = () => {
 
         {/* Dialog */}
         <Dialog open={regOpen} onOpenChange={(o) => { setRegOpen(o); if (!o && regStatus !== "pending") { setRegMinimized(false); persistReg({ open: o, minimized: false }); } }}>
-          <DialogContent className="sm:max-w-[540px]">
+          <DialogContent className="sm:max-w-[640px]">
             <DialogHeader>
-              <DialogTitle>How ?</DialogTitle>
+              <DialogTitle className="text-xl font-bold tracking-tight">How ?</DialogTitle>
             </DialogHeader>
             {regStatus === "idle" && (
-              <div className="space-y-3 text-sm">
-                <ol className="list-decimal pl-5 space-y-2">
+              <div className="space-y-5 text-base leading-relaxed">
+                <ol className="list-decimal pl-6 space-y-3">
                   <li>
                     Step 1: Go to website
-                    <button className="ml-1 underline" onClick={async () => { await navigator.clipboard.writeText("https://learn.nvidia.com/join?auth=login&redirectPath=/my-learning"); }}>
+                    <button className="ml-2 underline font-medium" onClick={async () => { await navigator.clipboard.writeText("https://learn.nvidia.com/join?auth=login&redirectPath=/my-learning"); }}>
                       learn.nvidia.com/join?auth=login&redirectPath=/my-learning
                     </button>
                   </li>
-                  <li>Step 2: create a new account with an email you don't use (like hotmail,gmail,etc)</li>
+                  <li>Step 2: Create a new account with an email you don't use (like hotmail, gmail, etc)</li>
                   <li>Step 3: Go back and input your account here:</li>
                 </ol>
-                <div className="space-y-2">
-                  <Input placeholder="Mail" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} />
-                  <Input placeholder="Pass" type="password" value={regPass} onChange={(e) => setRegPass(e.target.value)} />
-                  <div className="flex items-center space-x-2">
+                <div className="space-y-3">
+                  <Input placeholder="Mail" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} className="h-11 text-base" />
+                  <Input placeholder="Pass" type="password" value={regPass} onChange={(e) => setRegPass(e.target.value)} className="h-11 text-base" />
+                  <div className="flex items-center space-x-3">
                     <Checkbox id="confirm" checked={regConfirm} onCheckedChange={(v) => setRegConfirm(Boolean(v))} />
-                    <label htmlFor="confirm" className="text-sm">confirm that this account is not your official account for security reasons</label>
+                    <label htmlFor="confirm" className="text-sm md:text-base">Confirm that this account is not your official account for security reasons</label>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button disabled={!regEmail || !regPass || !regConfirm} onClick={onRegStart}>Done</Button>
+                <div className="flex items-center gap-3">
+                  <Button className="h-11 px-6 text-base" disabled={!regEmail || !regPass || !regConfirm} onClick={onRegStart}>Done</Button>
                 </div>
               </div>
             )}
             {regStatus === "pending" && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="whitespace-pre-line text-sm">we are confirming{"\n"}please wait ...{"\n"}and check your mailbox to confirm if there is a confirmation email</p>
-                  <Button variant="ghost" size="icon" onClick={() => { setRegMinimized(true); setRegOpen(false); persistReg({ open: false, minimized: true }); }}><Minimize2 className="h-4 w-4" /></Button>
+              <div className="space-y-4 text-center">
+                <div className="flex items-start justify-between">
+                  <p className="whitespace-pre-line text-base md:text-lg font-medium text-left">we are confirming{"\n"}please wait ...{"\n"}and check your mailbox to confirm if there is a confirmation email</p>
+                  <Button aria-label="Minimize" title="Minimize" variant="ghost" size="icon" onClick={() => { setRegMinimized(true); setRegOpen(false); persistReg({ open: false, minimized: true }); }}><Minimize2 className="h-5 w-5" /></Button>
                 </div>
-                <div className="flex items-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</div>
+                <div className="flex items-center justify-center text-base text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Processing...</div>
               </div>
             )}
             {regStatus === "done" && (
-              <div className="space-y-2">
-                <p className="whitespace-pre-line text-sm">Done{"\n"}thank you so much{"\n"}added 15 coin</p>
-                <div className="flex gap-2"><Button onClick={() => { setRegOpen(false); setRegMinimized(false); setRegStatus("idle"); setRegMsg(null); persistReg({ open: false, minimized: false, status: "idle", msg: null }); }}>Close</Button></div>
+              <div className="space-y-3 text-center">
+                <p className="text-2xl font-bold">Done</p>
+                <p className="text-base">thank you so much</p>
+                <p className="text-lg font-semibold text-emerald-500">added 15 coin</p>
+                <div className="flex justify-center gap-2"><Button className="h-10 px-6" onClick={() => { setRegOpen(false); setRegMinimized(false); setRegStatus("idle"); setRegMsg(null); persistReg({ open: false, minimized: false, status: "idle", msg: null }); }}>Close</Button></div>
               </div>
             )}
             {regStatus === "error" && (
-              <div className="space-y-2">
-                <p className="text-sm text-destructive">{regMsg ?? "Failed"}</p>
-                <div className="flex gap-2">
-                  <Button variant="secondary" onClick={() => { setRegStatus("idle"); setRegMsg(null); }}>Back</Button>
+              <div className="space-y-3 text-center">
+                <p className="text-base text-destructive">{regMsg ?? "Failed"}</p>
+                <div className="flex justify-center gap-2">
+                  <Button className="h-10 px-6" variant="secondary" onClick={() => { setRegStatus("idle"); setRegMsg(null); }}>Back</Button>
                 </div>
               </div>
             )}
