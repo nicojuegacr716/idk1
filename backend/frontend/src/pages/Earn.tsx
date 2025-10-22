@@ -393,16 +393,16 @@ const Earn = () => {
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+      <div className="grid gap-6">
         {/* Reg Account For Coin card */}
-        <Card className="glass-card h-fit max-w-md lg:col-start-2 lg:ml-auto">
+        <Card className="glass-card h-fit w-full max-w-2xl mx-auto">
           <CardHeader className="py-3">
             <CardTitle className="text-base font-semibold">Reg Account For Coin</CardTitle>
-            <CardDescription className="text-xs">Tạo tài khoản mới để nhận +15 xu</CardDescription>
+            <CardDescription className="text-sm">Tạo tài khoản mới để nhận +15 xu</CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
             <Button
-              className="w-full"
+              className="w-full h-11 text-base"
               variant="secondary"
               onClick={() => {
                 setRegOpen(true);
@@ -451,12 +451,12 @@ const Earn = () => {
             }
           }}
         >
-          <DialogContent className="sm:max-w-[640px]">
+          <DialogContent className="sm:max-w-[720px] md:max-w-[820px]">
             <DialogHeader>
               <DialogTitle className="text-xl font-bold tracking-tight">How ?</DialogTitle>
             </DialogHeader>
             {regStatus === "idle" && (
-              <div className="space-y-5 text-base leading-relaxed">
+              <div className="space-y-6 text-base leading-relaxed">
                 <ol className="list-decimal pl-6 space-y-3">
                   <li>
                     Step 1: Go to website
@@ -650,4 +650,3 @@ const Earn = () => {
 };
 
 export default Earn;
-
