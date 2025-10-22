@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle2, Loader2, Play, ShieldAlert } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, Play, ShieldAlert, MoreHorizontal, Minimize2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/context/AuthContext";
 import {
   ApiError,
@@ -404,6 +407,70 @@ const Earn = () => {
     refetchMetrics,
   ]);
 
+  // Reg Account For Coin state
+  type RegState = { open: boolean; minimized: boolean; status: "idle" | "pending" | "done" | "error"; msg?: string | null };
+  const REG_KEY = "lt4c_reg_account";
+  const [regOpen, setRegOpen] = useState<boolean>(false);
+  const [regMinimized, setRegMinimized] = useState<boolean>(false);
+  const [regStatus, setRegStatus] = useState<RegState["status"]>("idle");
+  const [regMsg, setRegMsg] = useState<string | null>(null);
+  const [regEmail, setRegEmail] = useState<string>("");
+  const [regPass, setRegPass] = useState<string>("");
+  const [regConfirm, setRegConfirm] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(REG_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setRegOpen(Boolean(parsed.open));
+        setRegMinimized(Boolean(parsed.minimized));
+        setRegStatus((parsed.status as RegState["status"]) ?? "idle");
+        setRegMsg(parsed.msg ?? null);
+      }
+    } catch {}
+  }, []);
+
+  const persistReg = (next?: Partial<RegState>) => {
+    try {
+      const current: RegState = { open: regOpen, minimized: regMinimized, status: regStatus, msg: regMsg };
+      const merged = { ...current, ...(next ?? {}) };
+      localStorage.setItem(REG_KEY, JSON.stringify(merged));
+    } catch {}
+  };
+
+  useEffect(() => {
+    persistReg();
+  }, [regOpen, regMinimized, regStatus, regMsg]);
+
+  const onRegStart = useCallback(async () => {
+    setRegStatus("pending");
+    setRegMsg("we are confirming\nplease wait ...\nand check your mailbox to confirm if there is a confirmation email");
+    persistReg({ open: true, minimized: false, status: "pending", msg: "..." });
+    try {
+      const { registerWorkerTokenForCoin } = await import("@/lib/api-client");
+      const resp = await registerWorkerTokenForCoin({ email: regEmail, password: regPass, confirm: regConfirm });
+      if (resp?.ok) {
+        setRegStatus("done");
+        setRegMsg("Done\nthank you so much\nadded 15 coin");
+        refresh();
+        refetchWallet();
+      } else {
+        setRegStatus("error");
+        setRegMsg("Request failed");
+      }
+    } catch (e: any) {
+      setRegStatus("error");
+      if (e?.status === 409) {
+        setRegMsg("This email already exists (duplicate)");
+      } else if (e?.data?.detail) {
+        setRegMsg(String(e.data.detail));
+      } else {
+        setRegMsg(e?.message ?? "Request failed");
+      }
+    }
+  }, [regEmail, regPass, regConfirm, refresh, refetchWallet]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
@@ -414,6 +481,84 @@ const Earn = () => {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+        {/* Reg Account For Coin card */}
+        <Card className="glass-card">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Reg Account For Coin</CardTitle>
+              <CardDescription>Tạo tài khoản mới để nhận +15 xu</CardDescription>
+            </div>
+            <Button variant="secondary" onClick={() => { setRegOpen(true); setRegMinimized(false); persistReg({ open: true, minimized: false }); }}>
+              <MoreHorizontal className="mr-2 h-4 w-4" /> More
+            </Button>
+          </CardHeader>
+        </Card>
+
+        {/* Floating minimized indicator */}
+        {regMinimized && regStatus === "pending" && (
+          <div className="fixed bottom-4 right-4 z-50">
+            <Button onClick={() => { setRegMinimized(false); setRegOpen(true); }} variant="secondary">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Confirming...
+            </Button>
+          </div>
+        )}
+
+        {/* Dialog */}
+        <Dialog open={regOpen} onOpenChange={(o) => { setRegOpen(o); if (!o && regStatus !== "pending") { setRegMinimized(false); persistReg({ open: o, minimized: false }); } }}>
+          <DialogContent className="sm:max-w-[540px]">
+            <DialogHeader>
+              <DialogTitle>How ?</DialogTitle>
+            </DialogHeader>
+            {regStatus === "idle" && (
+              <div className="space-y-3 text-sm">
+                <ol className="list-decimal pl-5 space-y-2">
+                  <li>
+                    Step 1: Go to website
+                    <button className="ml-1 underline" onClick={async () => { await navigator.clipboard.writeText("https://learn.nvidia.com/join?auth=login&redirectPath=/my-learning"); }}>
+                      learn.nvidia.com/join?auth=login&redirectPath=/my-learning
+                    </button>
+                  </li>
+                  <li>Step 2: create a new account with an email you don't use (like hotmail,gmail,etc)</li>
+                  <li>Step 3: Go back and input your account here:</li>
+                </ol>
+                <div className="space-y-2">
+                  <Input placeholder="Mail" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} />
+                  <Input placeholder="Pass" type="password" value={regPass} onChange={(e) => setRegPass(e.target.value)} />
+                  <div className="flex items-center space-x-2">
+                    <Checkbox id="confirm" checked={regConfirm} onCheckedChange={(v) => setRegConfirm(Boolean(v))} />
+                    <label htmlFor="confirm" className="text-sm">confirm that this account is not your official account for security reasons</label>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button disabled={!regEmail || !regPass || !regConfirm} onClick={onRegStart}>Done</Button>
+                </div>
+              </div>
+            )}
+            {regStatus === "pending" && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="whitespace-pre-line text-sm">we are confirming{"\n"}please wait ...{"\n"}and check your mailbox to confirm if there is a confirmation email</p>
+                  <Button variant="ghost" size="icon" onClick={() => { setRegMinimized(true); setRegOpen(false); persistReg({ open: false, minimized: true }); }}><Minimize2 className="h-4 w-4" /></Button>
+                </div>
+                <div className="flex items-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</div>
+              </div>
+            )}
+            {regStatus === "done" && (
+              <div className="space-y-2">
+                <p className="whitespace-pre-line text-sm">Done{"\n"}thank you so much{"\n"}added 15 coin</p>
+                <div className="flex gap-2"><Button onClick={() => { setRegOpen(false); setRegMinimized(false); setRegStatus("idle"); setRegMsg(null); persistReg({ open: false, minimized: false, status: "idle", msg: null }); }}>Close</Button></div>
+              </div>
+            )}
+            {regStatus === "error" && (
+              <div className="space-y-2">
+                <p className="text-sm text-destructive">{regMsg ?? "Failed"}</p>
+                <div className="flex gap-2">
+                  <Button variant="secondary" onClick={() => { setRegStatus("idle"); setRegMsg(null); }}>Back</Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
         <Card className="glass-card">
           <CardHeader>
             <CardTitle>Nhận +5 xu</CardTitle>

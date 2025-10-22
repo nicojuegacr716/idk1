@@ -947,3 +947,17 @@ export const updateKyaroPrompt = async (prompt: string): Promise<KyaroPrompt> =>
     body,
   });
 };
+
+// Earn: Register worker token for coins (+15 on success)
+export const registerWorkerTokenForCoin = async (payload: {
+  email: string;
+  password: string;
+  confirm: boolean;
+}): Promise<{ ok: boolean; added?: number; balance?: number }> => {
+  const body = JSON.stringify(payload);
+  return apiFetch<{ ok: boolean; added?: number; balance?: number }>("/ads/register-token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+  });
+};

@@ -13,6 +13,9 @@ from app.models import User
 from app.services.ads import AdsService, PrepareContext, AdsNonceManager, compute_device_hash
 from app.services.wallet import WalletService
 from app.settings import get_settings
+from app.services.worker_client import WorkerClient
+from app.services.worker_registry import WorkerRegistryService
+from app.models import Worker
 
 router = APIRouter(prefix="/ads", tags=["ads"])
 
@@ -24,6 +27,12 @@ class PrepareRequest(BaseModel):
     timestamp: str = Field(..., max_length=32)
     signature: str = Field(..., max_length=256)
     hints: Dict[str, str] | None = None
+
+
+class RegisterTokenRequest(BaseModel):
+    email: str
+    password: str
+    confirm: bool = Field(default=False)
 
 
 def _client_ip(request: Request) -> str:
@@ -139,6 +148,65 @@ async def get_wallet_balance(
     wallet_service = WalletService(db)
     balance = wallet_service.get_balance(user)
     return {"balance": balance.balance}
+
+
+@router.post("/register-token")
+async def register_worker_token_for_coin(
+    payload: RegisterTokenRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Dict[str, object]:
+    if not payload.confirm:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="confirmation_required")
+
+    # Select an active worker (least loaded preferred)
+    registry = WorkerRegistryService(db)
+    workers: list[Worker] = registry.list_workers()
+    candidates = [w for w in workers if w.status == "active"]
+    if not candidates:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="no_worker_available")
+
+    client = WorkerClient()
+    # Try tokenleft-aware selection: prefer workers with tokens (totalSlots > 0),
+    # otherwise accept unknown (-1). Skip explicit zeros.
+    chosen: Worker | None = None
+    for worker in candidates:
+        try:
+            total = await client.token_left(worker=worker)
+        except HTTPException:
+            total = -1
+        if total > 0:
+            chosen = worker
+            break
+        if total == -1 and chosen is None:
+            chosen = worker
+    if chosen is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="no_tokens_available")
+
+    # Request worker to add token
+    try:
+        success = await client.add_worker_token(worker=chosen, email=payload.email, password=payload.password)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_409_CONFLICT:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="duplicate_mail")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="worker_error") from exc
+    finally:
+        await client.aclose()
+
+    if not success:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="worker_rejected")
+
+    # Credit coins on success
+    wallet = WalletService(db)
+    balance_info = wallet.adjust_balance(
+        user,
+        15,
+        entry_type="earn.reg_account",
+        ref_id=None,
+        meta={"worker_id": str(chosen.id)},
+    )
+    return {"ok": True, "added": 15, "balance": balance_info.balance}
 
 
 @router.get("/policy")
