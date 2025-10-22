@@ -314,16 +314,16 @@ const Earn = () => {
 
   const handleWatchAd = useCallback(async () => {
     if (!profile) {
-      setMessage("Bạn cần đăng nhập để nhận thưởng.");
+      setMessage("Báº¡n cáº§n Ä‘Äƒng nháº­p Ä‘á»ƒ nháº­n thÆ°á»Ÿng.");
       return;
     }
     if (!policy) {
-      setMessage("Đang tải cấu hình thưởng, vui lòng thử lại sau.");
+      setMessage("Äang táº£i cáº¥u hÃ¬nh thÆ°á»Ÿng, vui lÃ²ng thá»­ láº¡i sau.");
       return;
     }
     if (cooldownUntil && cooldownUntil > Date.now()) {
       setStatus("error");
-      setMessage(`Bạn đang trong thời gian chờ ${formatSeconds(cooldownRemaining)}`);
+      setMessage(`Báº¡n Ä‘ang trong thá»i gian chá» ${formatSeconds(cooldownRemaining)}`);
       return;
     }
 
@@ -362,7 +362,7 @@ const Earn = () => {
       } else if (error instanceof Error) {
         setMessage(error.message);
       } else {
-        setMessage("Không thể chuẩn bị quảng cáo. Vui lòng thử lại.");
+        setMessage("KhÃ´ng thá»ƒ chuáº©n bá»‹ quáº£ng cÃ¡o. Vui lÃ²ng thá»­ láº¡i.");
       }
       return;
     }
@@ -375,14 +375,14 @@ const Earn = () => {
       if (newBalance > startingBalance) {
         const gained = newBalance - startingBalance;
         setStatus("success");
-        setMessage(`+${gained} xu đã được cộng vào ví của bạn.`);
+        setMessage(`+${gained} xu Ä‘Ã£ Ä‘Æ°á»£c cá»™ng vÃ o vÃ­ cá»§a báº¡n.`);
         setCooldownUntil(Date.now() + policy.minInterval * 1000);
         refresh();
         refetchWallet();
         refetchMetrics();
       } else {
         setStatus("success");
-        setMessage("Bạn đã hoàn thành quảng cáo. Phần thưởng sẽ được cập nhật sau vài giây.");
+        setMessage("Báº¡n Ä‘Ã£ hoÃ n thÃ nh quáº£ng cÃ¡o. Pháº§n thÆ°á»Ÿng sáº½ Ä‘Æ°á»£c cáº­p nháº­t sau vÃ i giÃ¢y.");
         setCooldownUntil(Date.now() + policy.minInterval * 1000);
       }
     } catch (error) {
@@ -390,7 +390,7 @@ const Earn = () => {
       if (error instanceof Error) {
         setMessage(error.message);
       } else {
-        setMessage("Không thể phát quảng cáo. Vui lòng thử lại.");
+        setMessage("KhÃ´ng thá»ƒ phÃ¡t quáº£ng cÃ¡o. Vui lÃ²ng thá»­ láº¡i.");
       }
     }
   }, [
@@ -418,6 +418,7 @@ const Earn = () => {
   const [regPass, setRegPass] = useState<string>("");
   const [regConfirm, setRegConfirm] = useState<boolean>(false);
 
+    const [regCopied, setRegCopied] = useState<boolean>(false);
   useEffect(() => {
     try {
       const raw = localStorage.getItem(REG_KEY);
@@ -474,25 +475,15 @@ const Earn = () => {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold">Xem quảng cáo nhận thưởng</h1>
+        <h1 className="text-3xl font-bold">Xem quáº£ng cÃ¡o nháº­n thÆ°á»Ÿng</h1>
         <p className="text-muted-foreground">
-          Xem quảng cáo 30 giây để nhận 5 xu. Phần thưởng chỉ được cộng khi xác minh thành công từ máy chủ.
+          Xem quáº£ng cÃ¡o 30 giÃ¢y Ä‘á»ƒ nháº­n 5 xu. Pháº§n thÆ°á»Ÿng chá»‰ Ä‘Æ°á»£c cá»™ng khi xÃ¡c minh thÃ nh cÃ´ng tá»« mÃ¡y chá»§.
         </p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         {/* Reg Account For Coin card */}
-        <Card className="glass-card h-fit max-w-md lg:col-start-2 lg:ml-auto">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-base font-semibold">Reg Account For Coin</CardTitle>
-              <CardDescription className="text-xs">Tạo tài khoản mới để nhận +15 xu</CardDescription>
-            </div>
-            <Button size="sm" variant="secondary" className="text-sm" onClick={() => { setRegOpen(true); setRegMinimized(false); persistReg({ open: true, minimized: false }); }}>
-              <MoreHorizontal className="mr-2 h-4 w-4" /> More
-            </Button>
-          </CardHeader>
-        </Card>
+        <Card className="glass-card h-fit max-w-md lg:col-start-2 lg:ml-auto">\n  <CardHeader className="py-3">\n    <CardTitle className="text-base font-semibold">Reg Account For Coin</CardTitle>\n    <CardDescription className="text-xs">T?o tï¿½i kho?n m?i d? nh?n +15 xu</CardDescription>\n  </CardHeader>\n  <CardContent className="pt-0">\n    <Button className="w-full" variant="secondary" onClick={() => { setRegOpen(true); setRegMinimized(false); persistReg({ open: true, minimized: false }); }}>\n      <MoreHorizontal className="mr-2 h-4 w-4" /> More\n    </Button>\n  </CardContent>\n</Card>
 
         {/* Floating minimized indicator */}
         {regMinimized && regStatus === "pending" && (
@@ -514,9 +505,9 @@ const Earn = () => {
                 <ol className="list-decimal pl-6 space-y-3">
                   <li>
                     Step 1: Go to website
-                    <button className="ml-2 underline font-medium" onClick={async () => { await navigator.clipboard.writeText("https://learn.nvidia.com/join?auth=login&redirectPath=/my-learning"); }}>
+                    <button className="ml-2 underline font-medium relative" title="Click to copy" onClick={async () => { await navigator.clipboard.writeText("https://learn.nvidia.com/join?auth=login&redirectPath=/my-learning"); setRegCopied(true); setTimeout(() => setRegCopied(false), 1500); }}>
                       learn.nvidia.com/join?auth=login&redirectPath=/my-learning
-                    </button>
+                    </button><span className="ml-2 text-xs text-emerald-500 align-middle">{regCopied ? "Copied" : ""}</span>
                   </li>
                   <li>Step 2: Create a new account with an email you don't use (like hotmail, gmail, etc)</li>
                   <li>Step 3: Go back and input your account here:</li>
@@ -529,7 +520,7 @@ const Earn = () => {
                     <label htmlFor="confirm" className="text-sm md:text-base">Confirm that this account is not your official account for security reasons</label>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center gap-3">
                   <Button className="h-11 px-6 text-base" disabled={!regEmail || !regPass || !regConfirm} onClick={onRegStart}>Done</Button>
                 </div>
               </div>
@@ -563,21 +554,21 @@ const Earn = () => {
         </Dialog>
         <Card className="glass-card">
           <CardHeader>
-            <CardTitle>Nhận +5 xu</CardTitle>
+            <CardTitle>Nháº­n +5 xu</CardTitle>
             <CardDescription>
-              Mỗi lượt xem hợp lệ sẽ được cộng xu sau khi xác minh.
+              Má»—i lÆ°á»£t xem há»£p lá»‡ sáº½ Ä‘Æ°á»£c cá»™ng xu sau khi xÃ¡c minh.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 rounded-lg border border-border/40 px-3 py-2">
-                <span className="text-sm text-muted-foreground">Số dư hiện tại</span>
+                <span className="text-sm text-muted-foreground">Sá»‘ dÆ° hiá»‡n táº¡i</span>
                 <Badge variant="secondary" className="text-base font-semibold">
                   {walletBalance} xu
                 </Badge>
               </div>
               <div className="flex items-center gap-2 rounded-lg border border-border/40 px-3 py-2">
-                <span className="text-sm text-muted-foreground">Thưởng mỗi lượt</span>
+                <span className="text-sm text-muted-foreground">ThÆ°á»Ÿng má»—i lÆ°á»£t</span>
                 <Badge variant="outline">{policy?.rewardPerView ?? 5} xu</Badge>
               </div>
             </div>
@@ -597,23 +588,23 @@ const Earn = () => {
                 {prepareMutation.isLoading || status === "loading" ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Đang chuẩn bị quảng cáo
+                    Äang chuáº©n bá»‹ quáº£ng cÃ¡o
                   </>
                 ) : status === "playing" ? (
                   <>
                     <Play className="mr-2 h-4 w-4" />
-                    Quảng cáo đang chạy
+                    Quáº£ng cÃ¡o Ä‘ang cháº¡y
                   </>
                 ) : (
                   <>
                     <Play className="mr-2 h-4 w-4" />
-                    Xem quảng cáo (+{policy?.rewardPerView ?? 5} xu)
+                    Xem quáº£ng cÃ¡o (+{policy?.rewardPerView ?? 5} xu)
                   </>
                 )}
               </Button>
               {cooldownUntil && cooldownUntil > Date.now() && (
                 <div className="text-sm text-muted-foreground">
-                  Vui lòng đợi {formatSeconds(cooldownRemaining)} trước khi xem quảng cáo tiếp theo.
+                  Vui lÃ²ng Ä‘á»£i {formatSeconds(cooldownRemaining)} trÆ°á»›c khi xem quáº£ng cÃ¡o tiáº¿p theo.
                 </div>
               )}
             </div>
@@ -629,13 +620,13 @@ const Earn = () => {
                 )}
                 <div>
                   <p className="text-sm font-semibold">
-                    {status === "idle" && "Sẵn sàng nhận thưởng"}
-                    {status === "preparing" && "Đang chuẩn bị quảng cáo..."}
-                    {status === "loading" && "Đang tải quảng cáo..."}
-                    {status === "playing" && "Quảng cáo đang phát, vui lòng xem đến hết để nhận thưởng."}
-                    {status === "verifying" && "Đang chờ xác minh phần thưởng..."}
-                    {status === "success" && "Hoàn tất"}
-                    {status === "error" && "Không thể hoàn thành lượt xem"}
+                    {status === "idle" && "Sáºµn sÃ ng nháº­n thÆ°á»Ÿng"}
+                    {status === "preparing" && "Äang chuáº©n bá»‹ quáº£ng cÃ¡o..."}
+                    {status === "loading" && "Äang táº£i quáº£ng cÃ¡o..."}
+                    {status === "playing" && "Quáº£ng cÃ¡o Ä‘ang phÃ¡t, vui lÃ²ng xem Ä‘áº¿n háº¿t Ä‘á»ƒ nháº­n thÆ°á»Ÿng."}
+                    {status === "verifying" && "Äang chá» xÃ¡c minh pháº§n thÆ°á»Ÿng..."}
+                    {status === "success" && "HoÃ n táº¥t"}
+                    {status === "error" && "KhÃ´ng thá»ƒ hoÃ n thÃ nh lÆ°á»£t xem"}
                   </p>
                   {message && <p className="text-sm text-muted-foreground mt-1">{message}</p>}
                 </div>
@@ -657,34 +648,34 @@ const Earn = () => {
           </CardContent>
         </Card>
 
-        <Card className="glass-card h-fit">
+        <Card className="glass-card h-fit lg:col-start-2">
           <CardHeader>
-            <CardTitle>Quota & Chính sách</CardTitle>
-            <CardDescription>Cài đặt phần thưởng hiện tại</CardDescription>
+            <CardTitle>Quota & ChÃ­nh sÃ¡ch</CardTitle>
+            <CardDescription>CÃ i Ä‘áº·t pháº§n thÆ°á»Ÿng hiá»‡n táº¡i</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
-            {isLoadingPolicy && <p className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Đang tải chính sách...</p>}
+            {isLoadingPolicy && <p className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Äang táº£i chÃ­nh sÃ¡ch...</p>}
             {policy && (
               <ul className="space-y-2">
                 <li>
-                  <span className="font-medium">Thưởng mỗi lượt:</span>{" "}
-                  {policy.rewardPerView} xu (xem tối thiểu {policy.requiredDuration}s)
+                  <span className="font-medium">ThÆ°á»Ÿng má»—i lÆ°á»£t:</span>{" "}
+                  {policy.rewardPerView} xu (xem tá»‘i thiá»ƒu {policy.requiredDuration}s)
                 </li>
                 <li>
-                  <span className="font-medium">Thời gian chờ:</span>{" "}
-                  {formatSeconds(policy.minInterval)} giữa các lượt trên cùng thiết bị.
+                  <span className="font-medium">Thá»i gian chá»:</span>{" "}
+                  {formatSeconds(policy.minInterval)} giá»¯a cÃ¡c lÆ°á»£t trÃªn cÃ¹ng thiáº¿t bá»‹.
                 </li>
                 <li>
-                  <span className="font-medium">Giới hạn theo người dùng:</span>{" "}
-                  {policy.effectivePerDay}/{policy.perDay} lượt mỗi ngày.
+                  <span className="font-medium">Giá»›i háº¡n theo ngÆ°á»i dÃ¹ng:</span>{" "}
+                  {policy.effectivePerDay}/{policy.perDay} lÆ°á»£t má»—i ngÃ y.
                 </li>
                 <li>
-                  <span className="font-medium">Giới hạn theo thiết bị:</span>{" "}
-                  {policy.perDevice} lượt mỗi ngày.
+                  <span className="font-medium">Giá»›i háº¡n theo thiáº¿t bá»‹:</span>{" "}
+                  {policy.perDevice} lÆ°á»£t má»—i ngÃ y.
                 </li>
                 {policy.priceFloor !== null && (
                   <li>
-                    <span className="font-medium">Giá sàn hiện tại:</span> CPM ≥ {policy.priceFloor}
+                    <span className="font-medium">GiÃ¡ sÃ n hiá»‡n táº¡i:</span> CPM â‰¥ {policy.priceFloor}
                   </li>
                 )}
               </ul>
@@ -692,32 +683,32 @@ const Earn = () => {
             {!isLoadingPolicy && !policy && (
               <div className="flex items-center gap-2 text-destructive">
                 <AlertCircle className="h-4 w-4" />
-                Không thể tải cấu hình thưởng.{" "}
+                KhÃ´ng thá»ƒ táº£i cáº¥u hÃ¬nh thÆ°á»Ÿng.{" "}
                 <button type="button" onClick={() => refetchPolicy()} className="underline">
-                  Thử lại
+                  Thá»­ láº¡i
                 </button>
               </div>
             )}
             <div className="pt-4 border-t border-border/40 space-y-1">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Thống kê hệ thống</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Thá»‘ng kÃª há»‡ thá»‘ng</p>
               <p className="text-sm">
-                Tỷ lệ lấp đầy:{" "}
+                Tá»· lá»‡ láº¥p Ä‘áº§y:{" "}
                 {metricsSnapshot.prepareOk
                   ? `${Math.round((metricsSnapshot.ssvSuccess / metricsSnapshot.prepareOk) * 100)}%`
                   : "--"}
               </p>
               <p className="text-sm">
-                Xác minh SSV thành công: {metricsSnapshot.ssvSuccess} /{" "}
+                XÃ¡c minh SSV thÃ nh cÃ´ng: {metricsSnapshot.ssvSuccess} /{" "}
                 {metricsSnapshot.ssvSuccess +
                   metricsSnapshot.ssvInvalid +
                   metricsSnapshot.ssvError +
                   metricsSnapshot.ssvDuplicate}
               </p>
               <p className="text-sm">
-                Tổng xu đã thưởng: {metricsSnapshot.rewardCoins}
+                Tá»•ng xu Ä‘Ã£ thÆ°á»Ÿng: {metricsSnapshot.rewardCoins}
               </p>
               <p className="text-sm">
-                Tỷ lệ lỗi: {(metricsSnapshot.failureRatio * 100).toFixed(1)}%
+                Tá»· lá»‡ lá»—i: {(metricsSnapshot.failureRatio * 100).toFixed(1)}%
               </p>
             </div>
           </CardContent>
