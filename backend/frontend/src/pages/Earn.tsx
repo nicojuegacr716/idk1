@@ -393,7 +393,7 @@ const Earn = () => {
         </p>
       </div>
 
-      <div className="grid gap-6 max-w-2xl mx-auto">
+      <div className="grid gap-6 w-full">
         {/* Reg Account For Coin card */}
         <Card className="glass-card h-fit w-full">
           <CardHeader className="py-3">
@@ -535,7 +535,7 @@ const Earn = () => {
           </DialogContent>
         </Dialog>
 
-        <Card className="glass-card">
+        <Card className="glass-card w-full">
           <CardHeader>
             <CardTitle>Nhận +5 xu</CardTitle>
             <CardDescription>Mỗi lượt xem hợp lệ sẽ được cộng xu sau khi xác minh.</CardDescription>
