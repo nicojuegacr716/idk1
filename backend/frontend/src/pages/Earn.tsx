@@ -264,8 +264,6 @@ const initialMetrics: RewardMetricsSummary = {
 };
 
 
-  );
-
   const waitForWalletUpdate = useCallback(
     async (previousBalance: number): Promise<number> => {
       for (let attempt = 0; attempt < 6; attempt += 1) {
