@@ -486,6 +486,54 @@ app.get('/log/:route', (req, res) => {
   }
 });
 
+app.get('/health', (req, res) => {
+  try {
+    const uptimeSeconds = process.uptime();
+    const memory = process.memoryUsage();
+    let totalSlots = 0;
+    let inUse = 0;
+
+    if (fs.existsSync(WORKER_TOKEN_FILE)) {
+      const tokenData = JSON.parse(fs.readFileSync(WORKER_TOKEN_FILE, 'utf8'));
+      for (const data of Object.values(tokenData)) {
+        if (typeof data.slot === 'number' && data.slot > 0) {
+          totalSlots += data.slot;
+        }
+        if (data.inuse) {
+          inUse += 1;
+        }
+      }
+    }
+
+    res.json({
+      ok: true,
+      timestamp: new Date().toISOString(),
+      uptime_seconds: Math.round(uptimeSeconds * 100) / 100,
+      vmCreationLocked,
+      tokens: {
+        totalSlots,
+        inUse,
+      },
+      system: {
+        platform: os.platform(),
+        release: os.release(),
+        loadavg: os.loadavg(),
+        freeMem: os.freemem(),
+        totalMem: os.totalmem(),
+        memoryRss: memory.rss,
+        nodeVersion: process.version,
+      },
+    });
+  } catch (error) {
+    console.error('Health check failed:', error.message);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to compute health status',
+      details: error.message,
+    });
+  }
+});
+
 app.get('/tokenleft', (req, res) => {
   try {
     if (!fs.existsSync(WORKER_TOKEN_FILE)) {
@@ -615,7 +663,9 @@ app.listen(4000, async () => {
   console.log('  POST /yud-ranyisi - Login and add worker token');
   console.log('  POST /vm-loso - Create VM (1=linux, 2=windows, 3=trash)');
   console.log('  POST /stop/:route - Stop VM by route');
+  console.log('  GET /health - Worker health status');
   console.log('  GET /log/:route - Get VM logs');
+  console.log('  GET /tokenleft - Remaining token slots');
 
   // Setup Cloudflare tunnel for SSHx link receiving
   await setupCloudflareTunnel();
