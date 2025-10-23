@@ -309,7 +309,7 @@ export default function VPS() {
     <div className="space-y-8">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Điều khiển VPS</h1>
+          <h1 className="text-3xl font-bold mb-2">Quản lý VPS</h1>
           <p className="text-muted-foreground">
             Khởi chạy, theo dõi và dừng các phiên VPS ở một nơi.
           </p>

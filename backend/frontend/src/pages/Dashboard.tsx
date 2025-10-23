@@ -217,7 +217,7 @@ export default function Dashboard() {
               threads.slice(0, 4).map((thread: SupportThread) => (
                 <div key={thread.id} className="flex items-center justify-between rounded-lg border border-border/40 px-4 py-3">
                   <div>
-                    <p className="text-sm font-medium capitalize">{thread.source} trợ lý</p>
+                    <p className="text-sm font-medium capitalize">Hỗ trợ bởi: {thread.source}</p>
                     <p className="text-xs text-muted-foreground">Cập nhật {timeAgo(thread.updated_at)}</p>
                   </div>
                   <span className="text-xs font-semibold uppercase text-muted-foreground">{thread.status}</span>

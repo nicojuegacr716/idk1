@@ -31,19 +31,17 @@ const Profile = () => {
     onSuccess: (data: UserProfile) => {
       queryClient.setQueryData(["profile"], data);
       refresh();
-      toast("Profile updated.");
+      toast("Đã cập nhật hồ sơ.");
     },
     onError: (error: unknown) => {
-      const message = error instanceof Error ? error.message : "Failed to update profile.";
+      const message = error instanceof Error ? error.message : "Cập nhật hồ sơ thất bại.";
       toast(message);
     },
   });
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!profile) {
-      return;
-    }
+    if (!profile) return;
     const payload = {
       display_name: sanitize(displayName) || null,
       phone_number: sanitize(phoneNumber) || null,
@@ -54,53 +52,53 @@ const Profile = () => {
   return (
     <div className="max-w-3xl space-y-6">
       <div>
-        <h1 className="text-3xl font-bold mb-2">My Profile</h1>
+        <h1 className="text-3xl font-bold mb-2">Hồ sơ của tôi</h1>
         <p className="text-muted-foreground">
-          Update your display information. Email and username are managed by the authentication system and cannot be changed here.
+          Cập nhật thông tin hiển thị. Email và tên đăng nhập do hệ thống xác thực quản lý, không thể thay đổi tại đây.
         </p>
       </div>
 
       <Card className="glass-card">
         <CardHeader>
-          <CardTitle>Account Details</CardTitle>
-          <CardDescription>Review the information associated with your account.</CardDescription>
+          <CardTitle>Thông tin tài khoản</CardTitle>
+          <CardDescription>Những mục bên dưới chỉ để xem nhanh.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid gap-2">
             <Label>Email</Label>
-            <Input value={profile?.email ?? "Not provided"} readOnly disabled />
+            <Input value={profile?.email ?? "Chưa cung cấp"} readOnly disabled />
           </div>
           <div className="grid gap-2">
-            <Label>Username</Label>
-            <Input value={profile?.username ?? "Unknown"} readOnly disabled />
+            <Label>Tên đăng nhập</Label>
+            <Input value={profile?.username ?? "Không rõ"} readOnly disabled />
           </div>
         </CardContent>
       </Card>
 
       <Card className="glass-card">
         <CardHeader>
-          <CardTitle>Personalise</CardTitle>
-          <CardDescription>Choose how other users will see you and how we can contact you.</CardDescription>
+          <CardTitle>Cá nhân hóa</CardTitle>
+          <CardDescription>Chọn cách bạn xuất hiện và cách chúng tôi liên hệ với bạn.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid gap-2">
-              <Label htmlFor="display-name">Display name</Label>
+              <Label htmlFor="display-name">Tên hiển thị</Label>
               <Input
                 id="display-name"
                 value={displayName}
                 onChange={(event) => setDisplayName(event.target.value.slice(0, MAX_DISPLAY_NAME))}
-                placeholder="Your public name"
+                placeholder="Tên công khai của bạn"
               />
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="phone-number">Phone number</Label>
+              <Label htmlFor="phone-number">Số điện thoại</Label>
               <Input
                 id="phone-number"
                 value={phoneNumber}
                 onChange={(event) => setPhoneNumber(event.target.value.slice(0, MAX_PHONE))}
-                placeholder="Optional contact number"
+                placeholder="Số liên hệ (không bắt buộc)"
               />
             </div>
 
@@ -108,7 +106,7 @@ const Profile = () => {
 
             <div className="flex items-center justify-end gap-2">
               <Button type="submit" disabled={mutation.isPending}>
-                {mutation.isPending ? "Saving..." : "Save changes"}
+                {mutation.isPending ? "Đang lưu…" : "Lưu thay đổi"}
               </Button>
             </div>
           </form>
@@ -119,4 +117,3 @@ const Profile = () => {
 };
 
 export default Profile;
-

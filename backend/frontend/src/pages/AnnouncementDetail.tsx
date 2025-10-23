@@ -27,7 +27,7 @@ const AnnouncementDetail = () => {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-        <p className="mt-2 text-sm text-muted-foreground">Loading announcement...</p>
+        <p className="mt-2 text-sm text-muted-foreground">Đang tải thông báo…</p>
       </div>
     );
   }
@@ -36,12 +36,12 @@ const AnnouncementDetail = () => {
     return (
       <Card className="glass-card">
         <CardHeader>
-          <CardTitle>Announcement unavailable</CardTitle>
-          <CardDescription>The announcement you requested could not be found.</CardDescription>
+          <CardTitle>Không tìm thấy thông báo</CardTitle>
+          <CardDescription>Bài thông báo này hiện không khả dụng hoặc đã bị xoá.</CardDescription>
         </CardHeader>
         <CardContent>
           <Button variant="secondary" onClick={() => navigate("/announcements")}>
-            Back to list
+            Quay lại danh sách
           </Button>
         </CardContent>
       </Card>
@@ -54,7 +54,7 @@ const AnnouncementDetail = () => {
     <div className="max-w-4xl space-y-6">
       <Button variant="ghost" className="gap-2" onClick={() => navigate(-1)}>
         <ArrowLeft className="w-4 h-4" />
-        Back
+        Quay lại
       </Button>
 
       <Card className="glass-card overflow-hidden">
@@ -65,10 +65,10 @@ const AnnouncementDetail = () => {
         )}
         <CardHeader className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline">Announcement</Badge>
+            <Badge variant="outline">Thông báo</Badge>
             {announcement.created_at && (
               <span className="text-xs text-muted-foreground">
-                Published {new Date(announcement.created_at).toLocaleString()}
+                Đăng lúc {new Date(announcement.created_at).toLocaleString()}
               </span>
             )}
           </div>
@@ -83,7 +83,7 @@ const AnnouncementDetail = () => {
           {attachments.length > 0 && (
             <div>
               <Separator className="my-4" />
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Attachments</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Tệp đính kèm</h3>
               <ul className="mt-3 space-y-2 text-sm">
                 {attachments.map((item, index) => (
                   <li key={index}>
@@ -108,4 +108,3 @@ const AnnouncementDetail = () => {
 };
 
 export default AnnouncementDetail;
-
