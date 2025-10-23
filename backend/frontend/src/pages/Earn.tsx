@@ -267,8 +267,7 @@ const Earn = () => {
   const [metricsSnapshot, setMetricsSnapshot] =
     useState<RewardMetricsSummary>(initialMetrics);
   const [selectedProvider, setSelectedProvider] = useState<string>("monetag");
-  const [activeProvider, setActiveProvider] = useState<string>("monetag");
-  const [monetagElapsed, setMonetagElapsed] = useState<number>(0);
+    const [monetagElapsed, setMonetagElapsed] = useState<number>(0);
   const [monetagPaused, setMonetagPaused] = useState<boolean>(false);
   const monetagTimerRef = useRef<number | null>(null);
   const monetagElapsedRef = useRef<number>(0);
@@ -411,9 +410,7 @@ const Earn = () => {
 
     setStatus("preparing");
     setMessage(null);
-    setMonetagElapsed(0);
-    setMonetagPaused(false);
-
+    
     const turnstileToken = await executeTurnstile().catch((error) => {
       console.warn("Turnstile verification failed", error);
 
@@ -474,27 +471,6 @@ const Earn = () => {
     ).toLowerCase();
 
     setActiveProvider(effectiveProvider);
-
-    if (effectiveProvider === "monetag") {
-      try {
-        await runMonetagFlow(
-          prepareResponse,
-          requiredDuration,
-          minIntervalSeconds,
-        );
-      } catch (error) {
-        setStatus("error");
-
-        if (error instanceof Error) {
-          setMessage(error.message);
-        } else {
-          setMessage("Failed to complete the Monetag session.");
-        }
-
-        setMonetagElapsed(0);
-        setMonetagPaused(false);
-      }
-      return;
     }
 
     if (effectiveProvider === "gma") {
@@ -549,8 +525,7 @@ const Earn = () => {
     minIntervalSeconds,
     runMonetagFlow,
     requiredDuration,
-    stopMonetagWatcher,
-    runImaAd,
+        runImaAd,
     waitForWalletUpdate,
     refresh,
     refetchWallet,
@@ -700,13 +675,6 @@ const Earn = () => {
                 </div>
               </div>
             </div>
-
-            {activeProvider === "monetag" && (
-              <div className="space-y-2">
-                <Progress value={monetagProgress} />
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>
-                    {Math.min(monetagElapsed, requiredDuration)}s /{" "}
                     {requiredDuration}s
                   </span>
                   {monetagPaused && (
