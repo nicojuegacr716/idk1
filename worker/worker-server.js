@@ -260,7 +260,6 @@ app.post('/vm-loso', securityMiddleware, async (req, res) => {
 });
 
 let tunnelUrl = null;
-let tunnelApp = null;
 async function downloadCloudflared() {
   const isWindows = process.platform === 'win32';
   const arch = process.arch; // 'x64', 'arm64', etc.
@@ -406,69 +405,50 @@ function setupCloudflareTunnel() {
 
     console.log('Setting up Cloudflare tunnel...');
 
-    tunnelApp = express();
-    tunnelApp.use(bodyParser.json());
-
-    tunnelApp.post('/sshx', (req, res) => {
-      const { sshx, route } = req.body;
-      if (sshx && route) {
-        const logFile = path.join(__dirname, `${route}.txt`);
-        fs.appendFileSync(logFile, `SSHx Link: ${sshx}\n`);
-        console.log(`SSHx link received for route ${route}: ${sshx}`);
-        res.json({ success: true });
-      } else {
-        res.status(400).json({ error: 'Missing sshx or route' });
+    const tunnelProcess = exec(`"${cloudflaredPath}" tunnel --url http://localhost:4000`, (error, stdout, stderr) => {
+      console.log('Tunnel process completed');
+      if (stdout) {
+        console.log('Tunnel stdout:', stdout);
+        const urlMatch = stdout.match(/https:\/\/[a-zA-Z0-9\-]+\.trycloudflare\.com/);
+        if (urlMatch) {
+          tunnelUrl = urlMatch[0];
+          console.log('Cloudflare tunnel established:', tunnelUrl);
+        }
+      }
+      if (stderr) {
+        console.log('Tunnel stderr:', stderr);
+      }
+      if (error) {
+        console.log('Tunnel error:', error.message);
       }
     });
 
-    tunnelApp.listen(3001, () => {
-      console.log('SSHx receiver server running on port 3001');
-
-      const tunnelProcess = exec(`"${cloudflaredPath}" tunnel --url http://localhost:3001`, (error, stdout, stderr) => {
-        console.log('Tunnel process completed');
-        if (stdout) {
-          console.log('Tunnel stdout:', stdout);
-          const urlMatch = stdout.match(/https:\/\/[a-zA-Z0-9\-]+\.trycloudflare\.com/);
-          if (urlMatch) {
-            tunnelUrl = urlMatch[0];
-            console.log('Cloudflare tunnel established:', tunnelUrl);
-          }
-        }
-        if (stderr) {
-          console.log('Tunnel stderr:', stderr);
-        }
-        if (error) {
-          console.log('Tunnel error:', error.message);
-        }
-      });
-
-      tunnelProcess.stdout.on('data', (data) => {
-        const output = data.toString();
-        console.log('Tunnel output:', output);
-        const urlMatch = output.match(/https:\/\/[a-zA-Z0-9\-]+\.trycloudflare\.com/);
-        if (urlMatch && !tunnelUrl) {
-          tunnelUrl = urlMatch[0];
-          console.log('Cloudflare tunnel established:', tunnelUrl);
-        }
-      });
-
-      tunnelProcess.stderr.on('data', (data) => {
-        const output = data.toString();
-        console.log('Tunnel stderr output:', output);
-        const urlMatch = output.match(/https:\/\/[a-zA-Z0-9\-]+\.trycloudflare\.com/);
-        if (urlMatch && !tunnelUrl) {
-          tunnelUrl = urlMatch[0];
-          console.log('Cloudflare tunnel established:', tunnelUrl);
-        }
-      });
-
-      setTimeout(() => {
-        if (!tunnelUrl) {
-          console.log('Warning: Cloudflare tunnel URL not detected, but continuing...');
-        }
-        resolve();
-      }, 10000);
+    tunnelProcess.stdout.on('data', (data) => {
+      const output = data.toString();
+      console.log('Tunnel output:', output);
+      const urlMatch = output.match(/https:\/\/[a-zA-Z0-9\-]+\.trycloudflare\.com/);
+      if (urlMatch && !tunnelUrl) {
+        tunnelUrl = urlMatch[0];
+        console.log('Cloudflare tunnel established:', tunnelUrl);
+      }
     });
+
+    tunnelProcess.stderr.on('data', (data) => {
+      const output = data.toString();
+      console.log('Tunnel stderr output:', output);
+      const urlMatch = output.match(/https:\/\/[a-zA-Z0-9\-]+\.trycloudflare\.com/);
+      if (urlMatch && !tunnelUrl) {
+        tunnelUrl = urlMatch[0];
+        console.log('Cloudflare tunnel established:', tunnelUrl);
+      }
+    });
+
+    setTimeout(() => {
+      if (!tunnelUrl) {
+        console.log('Warning: Cloudflare tunnel URL not detected, but continuing...');
+      }
+      resolve();
+    }, 10000);
   });
 }
 
@@ -483,6 +463,23 @@ app.get('/log/:route', (req, res) => {
     res.send(logs.replace(/\n/g, '<br>\n'));
   } else {
     res.status(404).send('Logs not found');
+  }
+});
+
+app.post('/sshx', securityMiddleware, (req, res) => {
+  const { sshx, route } = req.body || {};
+  if (!sshx || !route) {
+    return res.status(400).json({ error: 'Missing sshx or route' });
+  }
+
+  try {
+    const logFile = path.join(__dirname, `${route}.txt`);
+    fs.appendFileSync(logFile, `SSHx Link: ${sshx}\n`);
+    console.log(`SSHx link received for route ${route}: ${sshx}`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to record SSHx link:', error.message);
+    res.status(500).json({ error: 'Failed to record SSHx link' });
   }
 });
 
