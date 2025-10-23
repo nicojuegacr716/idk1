@@ -12,6 +12,7 @@ import Dashboard from "@/pages/Dashboard";
 import Profile from "@/pages/Profile";
 import VPS from "@/pages/VPS";
 import Earn from "@/pages/Earn";
+import GetsCoin from "@/pages/GetsCoin";
 import Announcements from "@/pages/Announcements";
 import AnnouncementDetail from "@/pages/AnnouncementDetail";
 import Support from "@/pages/Support";
@@ -79,6 +80,7 @@ const AppRoutes = () => (
     <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
     <Route path="/vps" element={<ProtectedRoute><VPS /></ProtectedRoute>} />
     <Route path="/earn" element={<ProtectedRoute><Earn /></ProtectedRoute>} />
+    <Route path="/gets-coin" element={<ProtectedRoute><GetsCoin /></ProtectedRoute>} />
     <Route path="/announcements" element={<ProtectedRoute><Announcements /></ProtectedRoute>} />
     <Route path="/announcements/:slug" element={<ProtectedRoute><AnnouncementDetail /></ProtectedRoute>} />
     <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />

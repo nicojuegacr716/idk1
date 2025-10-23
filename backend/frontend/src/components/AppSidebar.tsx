@@ -12,6 +12,7 @@ import {
   Zap,
   Package,
   Gift,
+  Coins,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
@@ -31,6 +32,7 @@ const menuItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
   { title: 'VPS', url: '/vps', icon: Server },
   { title: 'Earn Coins', url: '/earn', icon: Gift },
+  { title: 'Gets Coin', url: '/gets-coin', icon: Coins },
   { title: 'Support', url: '/support', icon: MessageSquare },
 ];
 
