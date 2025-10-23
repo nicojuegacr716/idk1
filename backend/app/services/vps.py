@@ -220,6 +220,7 @@ class VpsService:
         transaction_ctx = self.db.begin_nested() if self.db.in_transaction() else self.db.begin()
         with transaction_ctx:
             self.db.add(session)
+        self.db.refresh(session)
 
         if self.event_bus:
             await self.event_bus.publish(

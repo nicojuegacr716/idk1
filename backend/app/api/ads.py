@@ -236,14 +236,14 @@ async def register_worker_token_for_coin(
     if not success:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="worker_rejected")
     wallet = WalletService(db)
-    balance_info = wallet.adjust_balance(
-        user,
-        15,
-        entry_type="earn.reg_account",
-        ref_id=None,
-        meta={"worker_id": str(chosen.id)},
-    )
-
+    with db.begin():
+        balance_info = wallet.adjust_balance(
+            user,
+            15,
+            entry_type="earn.reg_account",
+            ref_id=None,
+            meta={"worker_id": str(chosen.id)},
+        )
     return {"ok": True, "added": 15, "balance": balance_info.balance}
 
 @router.get("/policy")
