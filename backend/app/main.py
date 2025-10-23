@@ -96,7 +96,10 @@ def _apply_cors_headers(request: Request, response: Response) -> Response:
     allow_all = "*" in allowed_origins
 
     if allow_all:
-        response.headers.setdefault("Access-Control-Allow-Origin", "*")
+        if origin:
+            response.headers.setdefault("Access-Control-Allow-Origin", origin)
+        else:
+            response.headers.setdefault("Access-Control-Allow-Origin", "*")
     elif origin and origin in allowed_origins:
         response.headers.setdefault("Access-Control-Allow-Origin", origin)
     else:
