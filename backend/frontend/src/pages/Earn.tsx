@@ -274,6 +274,38 @@ const Earn = () => {
   const monetagElapsedRef = useRef<number>(0);
   const monetagActiveRef = useRef<boolean>(false);
   const monetagCancelRef = useRef<((reason: Error) => void) | null>(null);
+
+  const policyQuery = useQuery<RewardPolicy>({
+    queryKey: ["ads-policy"],
+    queryFn: fetchRewardPolicy,
+    staleTime: 60_000,
+  });
+  const policy = policyQuery.data;
+  const isLoadingPolicy = policyQuery.isLoading;
+  const refetchPolicy = policyQuery.refetch;
+
+  const walletQuery = useQuery<WalletBalance>({
+    queryKey: ["wallet-balance"],
+    queryFn: fetchWalletBalance,
+    staleTime: 5_000,
+    refetchOnWindowFocus: true,
+    enabled: Boolean(profile),
+  });
+  const walletBalance = walletQuery.data?.balance ?? profile?.coins ?? 0;
+  const refetchWallet = walletQuery.refetch;
+
+  const metricsQuery = useQuery<RewardMetricsSummary>({
+    queryKey: ["reward-metrics"],
+    queryFn: fetchRewardMetrics,
+    staleTime: 60_000,
+  });
+  const refetchMetrics = metricsQuery.refetch;
+
+  useEffect(() => {
+    if (metricsQuery.data) {
+      setMetricsSnapshot(metricsQuery.data);
+    }
+  }, [metricsQuery.data]);
   const providerOptions = useMemo(() => {
     const rawEntries = Object.entries(policy?.providers ?? {}).filter(
       ([, cfg]) => cfg?.enabled,
