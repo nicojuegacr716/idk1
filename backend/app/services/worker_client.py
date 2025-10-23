@@ -11,7 +11,7 @@ from app.models import Worker
 
 class WorkerClient:
     def __init__(self, base_url: str | None = None) -> None:
-        timeout = httpx.Timeout(300.0, connect=30.0)
+        timeout = httpx.Timeout(500.0, connect=30.0)
         self._client = httpx.AsyncClient(timeout=timeout)
         self._base_url = base_url.rstrip("/") if base_url else None
 
