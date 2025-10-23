@@ -198,45 +198,43 @@ async def register_worker_token_for_coin(
 ) -> Dict[str, object]:
     if not payload.confirm:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="confirmation_required")
-
-    # Select an active worker (least loaded preferred)
     registry = WorkerRegistryService(db)
     workers: list[Worker] = registry.list_workers()
     candidates = [w for w in workers if w.status == "active"]
     if not candidates:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="no_worker_available")
-
     client = WorkerClient()
-    # Try tokenleft-aware selection: prefer workers with tokens (totalSlots > 0),
-    # otherwise accept unknown (-1). Skip explicit zeros.
-    chosen: Worker | None = None
+    worker_slots: list[tuple[Worker, int]] = []
     for worker in candidates:
         try:
             total = await client.token_left(worker=worker)
         except HTTPException:
             total = -1
-        if total > 0:
-            chosen = worker
-            break
-        if total == -1 and chosen is None:
-            chosen = worker
-    if chosen is None:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="no_tokens_available")
+        worker_slots.append((worker, total))
+    chosen: Worker | None = None
+    available = [(w, t) for w, t in worker_slots if t > 0]
+    unknown = [(w, t) for w, t in worker_slots if t == -1]
 
-    # Request worker to add token
+    if available:
+        chosen = min(available, key=lambda x: x[1])[0]
+    elif unknown:
+        chosen = unknown[0][0]
+    else:
+        chosen = candidates[0]
     try:
-        success = await client.add_worker_token(worker=chosen, email=payload.email, password=payload.password)
+        success = await client.add_worker_token(
+            worker=chosen,
+            email=payload.email,
+            password=payload.password,
+        )
     except HTTPException as exc:
         if exc.status_code == status.HTTP_409_CONFLICT:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="duplicate_mail")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="worker_error") from exc
     finally:
         await client.aclose()
-
     if not success:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="worker_rejected")
-
-    # Credit coins on success
     wallet = WalletService(db)
     balance_info = wallet.adjust_balance(
         user,
@@ -245,8 +243,8 @@ async def register_worker_token_for_coin(
         ref_id=None,
         meta={"worker_id": str(chosen.id)},
     )
-    return {"ok": True, "added": 15, "balance": balance_info.balance}
 
+    return {"ok": True, "added": 15, "balance": balance_info.balance}
 
 @router.get("/policy")
 async def get_ads_policy(
