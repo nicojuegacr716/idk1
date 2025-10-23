@@ -301,6 +301,23 @@ const Earn = () => {
   });
   const refetchMetrics = metricsQuery.refetch;
 
+  const cooldownRemaining = useMemo(() => {
+    if (!cooldownUntil) return 0;
+    return Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
+  }, [cooldownUntil]);
+
+  useEffect(() => {
+    if (!cooldownUntil) return;
+    const timer = setInterval(() => {
+      if (Date.now() >= cooldownUntil) {
+        setCooldownUntil(null);
+        setStatus("idle");
+        clearInterval(timer);
+      }
+    }, 1_000);
+    return () => clearInterval(timer);
+  }, [cooldownUntil]);
+
   useEffect(() => {
     if (metricsQuery.data) {
       setMetricsSnapshot(metricsQuery.data);
