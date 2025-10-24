@@ -37,8 +37,14 @@ async function performNvidiaLogin(email, password) {
     console.log(`Starting NVIDIA login for ${email}`);
 
     browser = await puppeteer.launch({
-      headless: false,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      headless: true,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-features=UseOzonePlatform",
+      ],
     });
 
     const page = await browser.newPage();
