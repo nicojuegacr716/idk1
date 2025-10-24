@@ -143,36 +143,41 @@ class WorkerClient:
         payload = {"email": email, "password": password}
 
         response = await self._client.post(url, json=payload)
-
+        print("Worker responded:", response.status_code, response.text)
         if response.status_code == status.HTTP_200_OK:
             try:
-               data = response.json()
+                data = response.json()
             except Exception:
-                data = None
-            if data is True or (isinstance(data, dict) and data.get("success") is True):
+                text = response.text.strip().lower()
+                if text == "true":
+                    return True
+                raise HTTPException(status_code=502, detail="invalid_worker_response")
+            if data is True:
                 return True
             if isinstance(data, str) and data.strip().lower() == "true":
                 return True
-            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="invalid_worker_response")
+            if isinstance(data, dict) and data.get("success") is True:
+                return True
 
+            raise HTTPException(status_code=502, detail=f"unexpected_worker_response: {data}")
         if response.status_code == status.HTTP_409_CONFLICT:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="duplicate_mail")
+            raise HTTPException(status_code=409, detail="duplicate_mail")
 
         try:
             response.raise_for_status()
         except httpx.HTTPError as exc:
             raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Worker token addition failed",
+                status_code=502,
+                detail=f"worker_unreachable_or_failed: {str(exc)}",
             ) from exc
 
         return False
+
 
     async def token_left(self, *, worker: Worker | None = None) -> int:
         """Query how many token slots are left on the worker."""
         base = self._base(worker)
         url = urljoin(base + "/", "tokenleft")
-        # Use a local client to avoid relying on instance initialisation
         timeout = httpx.Timeout(10.0, connect=5.0)
         verify = getattr(self, "_verify", get_settings().worker_verify_tls)
         async with httpx.AsyncClient(timeout=timeout, verify=verify) as client:
