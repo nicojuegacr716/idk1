@@ -29,12 +29,12 @@ export function Footer() {
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <Code2 className="h-3.5 w-3.5 text-primary" />
-          <span>Phien ban: {versionLabel}</span>
+          <span>Phiên bản: {versionLabel}</span>
         </div>
 
         <div className="flex w-full items-center justify-end gap-1.5 text-muted-foreground sm:w-auto">
           <Activity className="h-3.5 w-3.5 text-primary" />
-          <span>Ban quyen thuoc ve LT4C - ZynHash Production (c) 2025</span>
+          <span>Bản quyền thuộc về LT4C - ZynHash Production © 2025</span>
         </div>
       </div>
     </footer>

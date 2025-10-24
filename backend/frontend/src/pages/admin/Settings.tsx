@@ -33,22 +33,22 @@ const VERSION_OPTIONS: Array<{
   {
     value: "devStable",
     label: "devStable",
-    description: "Phien ban da kiem thu o muc on dinh hien tai nhung van dang phat trien.",
+    description: "Phiên bản ổn định đã được kiểm thử nhưng vẫn đang phát triển.",
   },
   {
     value: "stable",
     label: "Stable",
-    description: "Phien ban on dinh da duoc kiem thu day du.",
+    description: "Phiên bản ổn định đã được kiểm thử đầy đủ.",
   },
   {
     value: "dev",
     label: "dev",
-    description: "Phien ban phat hanh som, chua duoc kiem thu on dinh.",
+    description: "Phiên bản phát hành sớm, chưa được kiểm thử ổn định.",
   },
   {
     value: "devBack",
     label: "devBack",
-    description: "Phien ban cu duoc khoi dong lai do ban moi dang loi.",
+    description: "Phiên bản cũ được khởi động lại do bản mới đang lỗi.",
   },
 ];
 
@@ -190,12 +190,12 @@ export default function Settings() {
             {versionInfo && (
               <div className="text-xs text-muted-foreground">
                 <p>
-                  Hien tai: <span className="font-medium">{versionInfo.channel}</span>{" "}
+                  Hiện tại: <span className="font-medium">{versionInfo.channel}</span>{" "}
                   {versionInfo.version}
                 </p>
                 {versionInfo.updated_at && (
                   <p>
-                    Cap nhat {formatDistanceToNow(new Date(versionInfo.updated_at), { addSuffix: true })}
+                    Cập nhật {formatDistanceToNow(new Date(versionInfo.updated_at), { addSuffix: true })}
                   </p>
                 )}
               </div>
@@ -227,7 +227,7 @@ export default function Settings() {
                 placeholder="v1.2.69"
               />
               <p className="text-xs text-muted-foreground">
-                Chuoi nay se duoc hien thi ke ben ten kenh phat hanh.
+                Chuỗi này sẽ được hiển thị kèm theo tên kênh phát hành.
               </p>
             </div>
 
