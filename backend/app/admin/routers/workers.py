@@ -140,7 +140,7 @@ async def enable_worker(
     return _dto(worker)
 
 
-@router.delete("/workers/{worker_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+@router.delete("/workers/{worker_id}", response_class=Response)
 async def remove_worker(
     request: Request,
     worker_id: UUID,
