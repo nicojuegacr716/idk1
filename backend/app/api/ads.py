@@ -236,7 +236,8 @@ async def register_worker_token_for_coin(
     if not success:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="worker_rejected")
     wallet = WalletService(db)
-    with db.begin():
+    txn = db.begin_nested() if db.in_transaction() else db.begin()
+    with txn:
         balance_info = wallet.adjust_balance(
             user,
             15,
