@@ -145,10 +145,17 @@ class WorkerClient:
         response = await self._client.post(url, json=payload)
 
         if response.status_code == status.HTTP_200_OK:
-            data = response.json()
-            return data is True
+            try:
+               data = response.json()
+            except Exception:
+                data = None
+            if data is True or (isinstance(data, dict) and data.get("success") is True):
+                return True
+            if isinstance(data, str) and data.strip().lower() == "true":
+                return True
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="invalid_worker_response")
+
         if response.status_code == status.HTTP_409_CONFLICT:
-            # duplicate mail reported by worker
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="duplicate_mail")
 
         try:
