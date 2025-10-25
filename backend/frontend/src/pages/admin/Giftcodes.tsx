@@ -48,6 +48,7 @@ import {
 } from "@/lib/api-client";
 import type { GiftCode } from "@/lib/types";
 import { Gift, Loader2, Pencil, PlusCircle, Power, Trash2 } from "lucide-react";
+import { Slab } from "react-loading-indicators";
 
 type GiftCodeFormState = {
   title: string;
@@ -318,7 +319,7 @@ export default function AdminGiftCodes() {
         <CardContent>
           {giftcodesQuery.isLoading ? (
             <p className="py-12 text-center text-muted-foreground">
-              Đang tải dữ liệu...
+              <Slab color="#d18d00" size="large" text="Đang tải nội dung từ server" textColor="" />
             </p>
           ) : giftcodes.length === 0 ? (
             <p className="text-sm text-muted-foreground">Chưa có mã quà nào.</p>

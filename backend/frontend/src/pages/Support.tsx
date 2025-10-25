@@ -9,6 +9,8 @@ import {
   Link as LinkIcon,
   File as FileIcon,
   Search,
+  X,
+  ListFilter,
 } from "lucide-react";
 import {
   Card,
@@ -117,18 +119,18 @@ const ThreadBadge = ({ status }: { status: SupportThread["status"] }) => {
     status === "open"
       ? "bg-emerald-500/15 text-emerald-600"
       : status === "pending"
-        ? "bg-amber-500/15 text-amber-600"
-        : status === "resolved"
-          ? "bg-blue-500/15 text-blue-600"
-          : "bg-muted text-muted-foreground";
+      ? "bg-amber-500/15 text-amber-600"
+      : status === "resolved"
+      ? "bg-blue-500/15 text-blue-600"
+      : "bg-muted text-muted-foreground";
   const label =
     status === "open"
       ? "Mở"
       : status === "pending"
-        ? "Đang chờ"
-        : status === "resolved"
-          ? "Đã xử lý"
-          : "Đã đóng";
+      ? "Đang chờ"
+      : status === "resolved"
+      ? "Đã xử lý"
+      : "Đã đóng";
   return <Badge className={cn("px-2 py-0.5", styles)}>{label}</Badge>;
 };
 
@@ -159,7 +161,7 @@ const AttachmentEditor = ({
       {value.map((a, i) => (
         <div
           key={i}
-          className="grid gap-2 md:grid-cols-[1fr,2fr,auto,auto] md:items-center"
+          className="grid gap-2 sm:grid-cols-[1fr,2fr,auto,auto] sm:items-center"
         >
           <Input
             placeholder="Nhập tên tệp đính kèm"
@@ -182,7 +184,12 @@ const AttachmentEditor = ({
             <option value="image">Hình ảnh</option>
             <option value="file">Tệp</option>
           </select>
-          <Button variant="ghost" size="sm" onClick={() => remove(i)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => remove(i)}
+            className="sm:justify-self-end"
+          >
             Xóa
           </Button>
         </div>
@@ -254,7 +261,7 @@ const MessageBubble = ({
     ? `Người dùng ${formatUserRef(thread.user_id ?? null)}`
     : "Bạn";
   const adminLabel = viewerIsAdmin
-    ? (message.role ?? "Nhân viên hỗ trợ")
+    ? message.role ?? "Nhân viên hỗ trợ"
     : "Đội hỗ trợ";
   const senderLabel = isAi ? "Trợ lý Kyaro" : isUser ? userLabel : adminLabel;
 
@@ -280,7 +287,7 @@ const MessageBubble = ({
 
       <div
         className={cn(
-          "flex max-w-[78%] flex-col",
+          "flex max-w-[85%] sm:max-w-[78%] flex-col",
           alignRight ? "items-end" : "items-start",
         )}
       >
@@ -290,8 +297,8 @@ const MessageBubble = ({
             alignRight
               ? "bg-primary text-primary-foreground"
               : isAi
-                ? "bg-secondary/30 text-foreground"
-                : "bg-muted text-foreground",
+              ? "bg-secondary/30 text-foreground"
+              : "bg-muted text-foreground",
           )}
         >
           <p
@@ -364,6 +371,7 @@ const Support = () => {
     SupportThread["status"] | "all"
   >("open");
   const [composerTab, setComposerTab] = useState<TabKey>("reply");
+  const [showListMobile, setShowListMobile] = useState(false);
 
   // Compose state
   const [replyText, setReplyText] = useState("");
@@ -478,7 +486,7 @@ const Support = () => {
     sortedUserThreads,
   ]);
 
-  // Scroll to bottom on new messages (sau khi chọn thread hoặc có message mới)
+  // Scroll to bottom on new messages
   useEffect(() => {
     if (selectedThread) {
       setTimeout(
@@ -655,6 +663,7 @@ const Support = () => {
       setSelectedThreadId(thread.id);
       setAiText("");
       setAiAttachments([]);
+      setShowListMobile(false);
     },
     onError: (err: unknown) =>
       toast(err instanceof Error ? err.message : "Không gửi được tới trợ lý."),
@@ -678,6 +687,7 @@ const Support = () => {
       setSelectedThreadId(thread.id);
       setReplyText("");
       setReplyAttachments([]);
+      setShowListMobile(false);
     },
     onError: (err: unknown) =>
       toast(err instanceof Error ? err.message : "Không gửi được tin nhắn."),
@@ -744,10 +754,24 @@ const Support = () => {
    *    Render
    * ============== */
   return (
-    <div className="space-y-6">
-      <div className="grid gap-6 lg:grid-cols-[360px,1fr]">
-        {/* LEFT: Ticket list */}
-        <Card className="glass-card">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Mobile top bar */}
+      <div className="flex items-center justify-between sm:hidden">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          onClick={() => setShowListMobile(true)}
+        >
+          <ListFilter className="h-4 w-4" />
+          Danh sách ticket
+        </Button>
+        {selectedThread && <ThreadBadge status={selectedThread.status} />}
+      </div>
+
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-[360px,1fr]">
+        {/* LEFT: Ticket list (desktop) */}
+        <Card className="glass-card hidden lg:block">
           <CardHeader className="space-y-3">
             <CardTitle>Danh sách ticket</CardTitle>
             <CardDescription>
@@ -780,8 +804,7 @@ const Support = () => {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            {/* FIX: dùng h-[70vh], không dùng max-h */}
-            <ScrollArea className="h-[70vh] rounded-b-md border-t border-border/20">
+            <ScrollArea className="h-[70dvh] rounded-b-md border-t border-border/20 lt4c-scrollbar">
               <div className="space-y-2 p-2 pr-4">
                 {(!hasAdminAccess
                   ? userThreadsQuery.isLoading
@@ -818,8 +841,8 @@ const Support = () => {
                           {hasAdminAccess
                             ? `Người dùng ${formatUserRef(t.user_id)}`
                             : t.source === "ai"
-                              ? "AI"
-                              : "Hỗ trợ"}{" "}
+                            ? "AI"
+                            : "Hỗ trợ"}{" "}
                           •{" "}
                           {timeAgo(
                             t.last_message_at ?? t.updated_at ?? t.created_at,
@@ -836,17 +859,24 @@ const Support = () => {
         </Card>
 
         {/* RIGHT: Chat panel */}
-        <div className="space-y-6">
-          <Card className="glass-card min-h-[60vh]">
-            <CardHeader>
-              <CardTitle>
-                {selectedThread
-                  ? selectedThread.source === "ai"
-                    ? "Trợ lý Kyaro"
-                    : `Ticket ${formatTicketId(selectedThread.id)}`
-                  : "Chưa chọn ticket"}
+        <div className="space-y-4 sm:space-y-6">
+          <Card className="glass-card">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center justify-between gap-3">
+                <span className="truncate">
+                  {selectedThread
+                    ? selectedThread.source === "ai"
+                      ? "Trợ lý Kyaro"
+                      : `Ticket ${formatTicketId(selectedThread.id)}`
+                    : "Chưa chọn ticket"}
+                </span>
+                <span className="hidden sm:inline-flex">
+                  {selectedThread && (
+                    <ThreadBadge status={selectedThread.status} />
+                  )}
+                </span>
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="truncate">
                 {selectedThread
                   ? selectedThread.source === "ai"
                     ? "Hỏi đáp nhanh với trợ lý."
@@ -855,9 +885,8 @@ const Support = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {/* FIX: dùng h-[55vh] + padding phải để tránh che scrollbar */}
-              <ScrollArea className="h-[55vh] rounded-md border border-border/20">
-                <div className="space-y-5 p-4 pr-6">
+              <ScrollArea className="h-[55dvh] sm:h-[60dvh] rounded-md border border-border/20 lt4c-scrollbar">
+                <div className="space-y-5 p-3 sm:p-4 pr-5">
                   {!selectedThread && (
                     <p className="text-sm text-muted-foreground">
                       Chưa có cuộc trò chuyện nào được chọn.
@@ -882,7 +911,7 @@ const Support = () => {
           <Card className="glass-card">
             <CardHeader className="pb-2">
               <CardTitle>Soạn tin nhắn</CardTitle>
-              <CardDescription>
+              <CardDescription className="truncate">
                 {hasAdminAccess
                   ? "Chọn tab phù hợp: trả lời khách hoặc hỏi Trợ lý Kyaro (nội bộ)."
                   : "Gửi tin nhắn, đính kèm ảnh/liên kết. Tin nhắn sẽ tới đúng kênh bạn đã chọn."}
@@ -905,7 +934,7 @@ const Support = () => {
                       placeholder="Nhập phản hồi cho người dùng..."
                       value={replyText}
                       onChange={(e) => setReplyText(e.target.value)}
-                      className="min-h-[120px]"
+                      className="min-h-[100px] sm:min-h-[120px]"
                       disabled={!selectedThread}
                     />
                     <AttachmentEditor
@@ -941,7 +970,7 @@ const Support = () => {
                       placeholder="Đặt câu hỏi cho Trợ lý Kyaro (riêng tư)..."
                       value={aiText}
                       onChange={(e) => setAiText(e.target.value)}
-                      className="min-h-[120px]"
+                      className="min-h-[100px] sm:min-h-[120px]"
                     />
                     <AttachmentEditor
                       value={aiAttachments}
@@ -977,7 +1006,7 @@ const Support = () => {
                         placeholder="Hỏi trợ lý..."
                         value={aiText}
                         onChange={(e) => setAiText(e.target.value)}
-                        className="min-h-[120px]"
+                        className="min-h-[100px] sm:min-h-[120px]"
                       />
                       <AttachmentEditor
                         value={aiAttachments}
@@ -1010,7 +1039,7 @@ const Support = () => {
                         placeholder="Nhập tin nhắn..."
                         value={replyText}
                         onChange={(e) => setReplyText(e.target.value)}
-                        className="min-h-[120px]"
+                        className="min-h-[100px] sm:min-h-[120px]"
                       />
                       <AttachmentEditor
                         value={replyAttachments}
@@ -1038,9 +1067,110 @@ const Support = () => {
           </Card>
         </div>
       </div>
+
+      {/* Mobile slide-over list */}
+      {showListMobile && (
+        <div className="lg:hidden fixed inset-0 z-50">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setShowListMobile(false)}
+          />
+          <div className="absolute inset-y-0 left-0 w-[88%] max-w-[380px] bg-background shadow-2xl border-r border-border lt4c-scrollbar flex flex-col">
+            <div className="flex items-center gap-2 p-3 border-b border-border/50">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowListMobile(false)}
+              >
+                <X className="h-5 w-5" />
+              </Button>
+              <p className="font-semibold">Danh sách ticket</p>
+            </div>
+
+            <div className="p-3 flex items-center gap-2">
+              <div className="relative w-full">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="pl-8"
+                  placeholder="Tìm ticket..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              {hasAdminAccess && (
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as any)}
+                  className="h-10 rounded-md border border-input bg-background px-2 text-xs shadow-sm"
+                >
+                  <option value="all">Tất cả</option>
+                  <option value="open">Mở</option>
+                  <option value="pending">Đang chờ</option>
+                  <option value="resolved">Đã xử lý</option>
+                  <option value="closed">Đã đóng</option>
+                </select>
+              )}
+            </div>
+
+            <ScrollArea className="flex-1 lt4c-scrollbar">
+              <div className="space-y-2 p-2 pr-4">
+                {(!hasAdminAccess
+                  ? userThreadsQuery.isLoading
+                  : adminSummariesQuery.isLoading) && (
+                  <p className="px-2 py-2 text-sm text-muted-foreground">
+                    Đang tải danh sách...
+                  </p>
+                )}
+                {ticketItems.length === 0 && (
+                  <p className="px-2 py-2 text-sm text-muted-foreground">
+                    Không có ticket phù hợp.
+                  </p>
+                )}
+                {ticketItems.map((t: any) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedThreadId(t.id);
+                      setShowListMobile(false);
+                    }}
+                    className={cn(
+                      "w-full rounded-lg border border-transparent px-3 py-2 text-left transition hover:border-border/60",
+                      t.id === selectedThreadId
+                        ? "border-primary bg-primary/5"
+                        : "bg-card",
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold">
+                          {t.source === "ai"
+                            ? "Trợ lý AI"
+                            : `Ticket ${formatTicketId(t.id)}`}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {hasAdminAccess
+                            ? `Người dùng ${formatUserRef(t.user_id)}`
+                            : t.source === "ai"
+                            ? "AI"
+                            : "Hỗ trợ"}{" "}
+                          •{" "}
+                          {timeAgo(
+                            t.last_message_at ?? t.updated_at ?? t.created_at,
+                          )}
+                        </p>
+                      </div>
+                      <ThreadBadge status={t.status} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default Support;
-

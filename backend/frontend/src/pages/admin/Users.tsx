@@ -46,6 +46,7 @@ import {
 } from "@/lib/api-client";
 import type { AdminRole, AdminUser, AdminUsersResponse } from "@/lib/types";
 import { toast } from "@/components/ui/sonner";
+import { Slab } from "react-loading-indicators";
 
 const initials = (name: string | null, fallback: string) => {
   const base = name || fallback;
@@ -408,7 +409,7 @@ export default function Users() {
                 {isLoading && (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                      Đang tải danh sách...
+                      <Slab color="#d18d00" size="large" text="Đang tải nội dung từ server" textColor="" />
                     </TableCell>
                   </TableRow>
                 )}

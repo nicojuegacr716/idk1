@@ -47,6 +47,7 @@ import {
   updateWorker,
 } from "@/lib/api-client";
 import type { WorkerDetail, WorkerHealthStatus, WorkerInfo } from "@/lib/types";
+import { Slab } from "react-loading-indicators";
 
 const statusBadge = (status: string) => {
   switch (status) {
@@ -391,7 +392,7 @@ export default function Workers() {
         {isLoading && (
           <Card className="glass-card">
             <CardHeader>
-              <CardTitle>Đang tải danh sách worker...</CardTitle>
+              <CardTitle><Slab color="#d18d00" size="large" text="Đang tải nội dung từ server" textColor="" /></CardTitle>
             </CardHeader>
           </Card>
         )}

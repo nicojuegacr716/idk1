@@ -248,7 +248,7 @@ export default function Roles() {
                 {isLoading && (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
-                      Đang tải vai trò...
+                      <Slab color="#d18d00" size="large" text="Đang tải nội dung từ server" textColor="" />
                     </TableCell>
                   </TableRow>
                 )}
