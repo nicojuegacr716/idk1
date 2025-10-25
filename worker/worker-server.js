@@ -59,11 +59,26 @@ async function performNvidiaLogin(email, password) {
     await page.type('#signinPassword', password);
     await page.click('#passwordLoginButton');
 
+    // NEW: phát hiện sớm trạng thái “chờ xác minh email”
+    const EMAIL_WAIT_RX = /nvgs\.nvidia\.com\/v1\/nfactor\/email-auth-wait/i;
+    try {
+      await Promise.race([
+        page.waitForURL(EMAIL_WAIT_RX, { timeout: 8000 }),
+        page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 8000 }),
+      ]);
+    } catch (_) {}
+
     console.log('Waiting for login completion...');
     await new Promise(resolve => setTimeout(resolve, 1 * 30 * 1000));
 
     let currentUrl = page.url();
     console.log('Current URL after password click:', currentUrl);
+
+    // NEW: nếu đúng trang chờ xác minh email → trả về ngay
+    if (EMAIL_WAIT_RX.test(currentUrl)) {
+      console.log('Email verification required. Returning early.');
+      return { success: false, status: 'need_email_verify', message: 'Yêu cầu xác minh email' };
+    }
 
     if (!currentUrl.includes('/dashboard')) {
       console.log('Not on dashboard, waiting for navigation...');
@@ -161,11 +176,11 @@ app.post('/yud-ranyisi', securityMiddleware, async (req, res) => {
     if (!local || !domain) {
       return res.status(400).json({ error: 'invalid_email' });
     }
-const allowedDomains = ['gmail.com', 'hotmail.com', 'outlook.com'];
+    const allowedDomains = ['gmail.com', 'hotmail.com', 'outlook.com'];
 
-if (!allowedDomains.includes(domain)) {
-  return res.status(400).json({ error: 'domain_not_supported' });
-}
+    if (!allowedDomains.includes(domain)) {
+      return res.status(400).json({ error: 'domain_not_supported' });
+    }
 
     if (local.includes('.') || local.includes('+')) {
       return res.status(400).json({ error: 'dottrick_not_allowed' });
@@ -201,6 +216,10 @@ if (!allowedDomains.includes(domain)) {
   if (result.success) {
     res.json(true);
   } else {
+    // NEW: bubble mã riêng “need_email_verify” cho FE xử lý hiển thị
+    if (result.status === 'need_email_verify') {
+      return res.status(401).json({ error: 'need_email_verify' });
+    }
     res.status(401).json({ error: result.message });
   }
 });
