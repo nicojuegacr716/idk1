@@ -91,6 +91,8 @@ const AppRoutes = () => (
     <Route path="/announcements" element={<ProtectedRoute><Announcements /></ProtectedRoute>} />
     <Route path="/announcements/:slug" element={<ProtectedRoute><AnnouncementDetail /></ProtectedRoute>} />
     <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
+    <Route path="/giftcode" element={<ProtectedRoute><Giftcode /></ProtectedRoute>} />
+    <Route path="/admin/giftcodes" element={<AdminRoute><GiftcodesAdmin /></AdminRoute>} />
     <Route path="/admin/users" element={<AdminRoute><Users /></AdminRoute>} />
     <Route path="/admin/roles" element={<AdminRoute><Roles /></AdminRoute>} />
     <Route path="/admin/vps-products" element={<AdminRoute><VpsProductsAdmin /></AdminRoute>} />
