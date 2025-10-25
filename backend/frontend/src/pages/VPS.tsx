@@ -722,7 +722,7 @@ const SessionCard = ({ session, onStop, isStopping }: SessionCardProps) => {
                     : "Không thể tải nhật ký."}
               </p>
             ) : (
-              <pre className="text-xs font-mono whitespace-pre-wrap leading-relaxed">{logText || "(nhật ký trống)"}</pre>
+              <pre className="text-xs font-mono whitespace-pre-wrap leading-relaxed">{logText || "đang load (4s)"}</pre>
             )}
           </div>
           <DialogFooter className="justify-end">
