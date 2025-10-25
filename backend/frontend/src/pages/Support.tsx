@@ -500,7 +500,6 @@ const Support = () => {
   }, [selectedThread?.id, selectedThread?.messages?.length]);
 
   /* Cache update helpers */
-  const queryClient = useQueryClient();
   const updateThreadInCache = (
     threadId: string,
     updater: (thread: SupportThread) => SupportThread,
