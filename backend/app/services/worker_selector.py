@@ -36,7 +36,14 @@ class WorkerSelector:
         )
         workers = list(self.db.scalars(stmt))
         if not workers:
-            return None
+            fallback_stmt = (
+                select(Worker)
+                .where(Worker.status == "active")
+                .order_by(Worker.created_at.desc())
+            )
+            workers = list(self.db.scalars(fallback_stmt))
+            if not workers:
+                return None
 
         counts = self._active_session_counts([worker.id for worker in workers])
         candidates: list[tuple[Worker, int]] = []
