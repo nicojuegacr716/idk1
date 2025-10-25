@@ -1,0 +1,61 @@
+type SessionLogPanelProps = {
+  session: VpsSession;
+  query: ReturnType<typeof useSessionLog>;
+};
+
+const SessionLogPanel = ({ session, query }: SessionLogPanelProps) => {
+  const hasLog = Boolean(session.has_log && session.worker_route);
+  const autoRefresh = computeRefetchInterval(session);
+  let content: ReactNode;
+
+  if (!hasLog) {
+    content = <p className="text-xs text-muted-foreground">Nhật ký chưa sẵn sàng.</p>;
+  } else if (query.isLoading) {
+    content = (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Đang tải nhật ký…
+      </div>
+    );
+  } else if (query.isError) {
+    const message =
+      query.error instanceof ApiError
+        ? query.error.message
+        : query.error instanceof Error
+          ? query.error.message
+          : "Không thể tải nhật ký.";
+    content = <p className="text-xs text-destructive">{message}</p>;
+  } else {
+    const text = query.data ?? "";
+    content = (
+      <pre className="text-xs font-mono whitespace-pre-wrap leading-relaxed">{text || "(nhật ký trống)"}</pre>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-semibold">
+          <Terminal className="w-4 h-4" />
+          Nhật ký hoạt động
+        </p>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-2"
+          onClick={() => query.refetch()}
+          disabled={!hasLog || query.isFetching}
+        >
+          {query.isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          Làm mới
+        </Button>
+      </div>
+      <ScrollArea className="h-[260px] rounded-md border border-border/40 bg-muted/20">
+        <div className="p-4">{content}</div>
+      </ScrollArea>
+      <p className="text-[10px] text-muted-foreground">
+        {autoRefresh ? `Tự động làm mới mỗi ${Math.round(autoRefresh / 1000)}s.` : "Đã tắt tự động làm mới."}
+      </p>
+    </div>
+  );
+};
