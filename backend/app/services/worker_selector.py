@@ -61,7 +61,9 @@ class WorkerSelector:
             candidates.append((worker, active))
 
         if not candidates:
-            return None
+            # All workers appear at capacity; fall back to the least-loaded worker anyway.
+            least_loaded_worker = min(workers, key=lambda worker: counts.get(worker.id, 0))
+            return least_loaded_worker
 
         min_active = min(active for _, active in candidates)
         least_loaded = [worker for worker, active in candidates if active == min_active]
