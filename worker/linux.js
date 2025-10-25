@@ -76,7 +76,7 @@ const headers = {
 let jupyterURL = null;
 let interval;
 let retryCount = 0;
-const maxRetries = 20;
+const maxRetries = 50;
 let browser = null;
 
 function sleep(ms) {
@@ -190,9 +190,9 @@ function waitForJupyterURL() {
 
 (async () => {
   try {
-    const urlFound = await waitForJupyterURL();
+    
     logToFile("Waiting for lab creating ...");
-    await sleep(6 * 60 * 1000);
+    const urlFound = await waitForJupyterURL();
     logToFile("Done!");
     logToFile("Lab created...");
     await main();
