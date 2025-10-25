@@ -43,7 +43,12 @@ class WorkerSelector:
 
         for worker in workers:
             active = counts.get(worker.id, 0)
-            max_sessions = worker.max_sessions if worker.max_sessions is not None else float("inf")
+            max_sessions_raw = worker.max_sessions
+            max_sessions = (
+                float("inf")
+                if max_sessions_raw is None or max_sessions_raw <= 0
+                else max_sessions_raw
+            )
             if active >= max_sessions:
                 continue
             candidates.append((worker, active))
