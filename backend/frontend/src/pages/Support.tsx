@@ -287,13 +287,14 @@ const MessageBubble = ({
 
       <div
         className={cn(
-          "flex max-w-[85%] sm:max-w-[78%] flex-col",
+          // bóp bubble hơn trên mobile để tránh đụng mép
+          "flex max-w-[88%] sm:max-w-[78%] flex-col",
           alignRight ? "items-end" : "items-start",
         )}
       >
         <div
           className={cn(
-            "rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm",
+            "rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm overflow-hidden",
             alignRight
               ? "bg-primary text-primary-foreground"
               : isAi
@@ -440,6 +441,8 @@ const Support = () => {
       const q = search.trim().toLowerCase();
       return base.filter((t: any) => {
         const id = (t.id ?? "").toString().toLowerCase();
+        the: // make TS happy in some setups
+        1;
         const source = (t.source ?? "").toString().toLowerCase();
         const name = (t.title ?? t.subject ?? "").toString().toLowerCase();
         return id.includes(q) || source.includes(q) || name.includes(q);
@@ -497,6 +500,7 @@ const Support = () => {
   }, [selectedThread?.id, selectedThread?.messages?.length]);
 
   /* Cache update helpers */
+  const queryClient = useQueryClient();
   const updateThreadInCache = (
     threadId: string,
     updater: (thread: SupportThread) => SupportThread,
@@ -754,7 +758,7 @@ const Support = () => {
    *    Render
    * ============== */
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
       {/* Mobile top bar */}
       <div className="flex items-center justify-between sm:hidden">
         <Button
@@ -771,12 +775,11 @@ const Support = () => {
 
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-[360px,1fr]">
         {/* LEFT: Ticket list (desktop) */}
-        <Card className="glass-card hidden lg:block">
+        <Card className="glass-card hidden lg:flex lg:flex-col">
           <CardHeader className="space-y-3">
             <CardTitle>Danh sách ticket</CardTitle>
             <CardDescription>
-              Chọn ticket để đọc & trả lời. Tìm kiếm theo mã, nguồn hoặc tiêu
-              đề.
+              Chọn ticket để đọc & trả lời. Tìm kiếm theo mã, nguồn hoặc tiêu đề.
             </CardDescription>
             <div className="flex items-center gap-2">
               <div className="relative w-full">
@@ -803,8 +806,9 @@ const Support = () => {
               )}
             </div>
           </CardHeader>
-          <CardContent className="p-0">
-            <ScrollArea className="h-[70dvh] rounded-b-md border-t border-border/20 lt4c-scrollbar">
+          <CardContent className="p-0 flex-1">
+            {/* dùng max-h + min-h để scale mượt trên mobile/desktop */}
+            <ScrollArea className="max-h-[72svh] min-h-[50svh] rounded-b-md border-t border-border/20 lt4c-scrollbar">
               <div className="space-y-2 p-2 pr-4">
                 {(!hasAdminAccess
                   ? userThreadsQuery.isLoading
@@ -884,8 +888,14 @@ const Support = () => {
                   : "Hãy chọn một ticket ở khung bên trái để bắt đầu."}
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[55dvh] sm:h-[60dvh] rounded-md border border-border/20 lt4c-scrollbar">
+            <CardContent className="overflow-x-hidden">
+              {/* dùng svh + clamp chiều cao để khớp mọi màn */}
+              <ScrollArea className="rounded-md border border-border/20 lt4c-scrollbar"
+                style={{
+                  // min 48svh, lý tưởng 58svh, tối đa 68svh
+                  height: "clamp(48svh, 58svh, 68svh)",
+                }}
+              >
                 <div className="space-y-5 p-3 sm:p-4 pr-5">
                   {!selectedThread && (
                     <p className="text-sm text-muted-foreground">
@@ -934,7 +944,7 @@ const Support = () => {
                       placeholder="Nhập phản hồi cho người dùng..."
                       value={replyText}
                       onChange={(e) => setReplyText(e.target.value)}
-                      className="min-h-[100px] sm:min-h-[120px]"
+                      className="min-h-[96px] sm:min-h-[120px]"
                       disabled={!selectedThread}
                     />
                     <AttachmentEditor
@@ -970,7 +980,7 @@ const Support = () => {
                       placeholder="Đặt câu hỏi cho Trợ lý Kyaro (riêng tư)..."
                       value={aiText}
                       onChange={(e) => setAiText(e.target.value)}
-                      className="min-h-[100px] sm:min-h-[120px]"
+                      className="min-h-[96px] sm:min-h-[120px]"
                     />
                     <AttachmentEditor
                       value={aiAttachments}
@@ -1006,7 +1016,7 @@ const Support = () => {
                         placeholder="Hỏi trợ lý..."
                         value={aiText}
                         onChange={(e) => setAiText(e.target.value)}
-                        className="min-h-[100px] sm:min-h-[120px]"
+                        className="min-h-[96px] sm:min-h-[120px]"
                       />
                       <AttachmentEditor
                         value={aiAttachments}
@@ -1039,7 +1049,7 @@ const Support = () => {
                         placeholder="Nhập tin nhắn..."
                         value={replyText}
                         onChange={(e) => setReplyText(e.target.value)}
-                        className="min-h-[100px] sm:min-h-[120px]"
+                        className="min-h-[96px] sm:min-h-[120px]"
                       />
                       <AttachmentEditor
                         value={replyAttachments}
@@ -1075,7 +1085,7 @@ const Support = () => {
             className="absolute inset-0 bg-black/50"
             onClick={() => setShowListMobile(false)}
           />
-          <div className="absolute inset-y-0 left-0 w-[88%] max-w-[380px] bg-background shadow-2xl border-r border-border lt4c-scrollbar flex flex-col">
+          <div className="absolute inset-y-0 left-0 w-[92vw] max-w-none bg-background shadow-2xl border-r border-border lt4c-scrollbar flex flex-col">
             <div className="flex items-center gap-2 p-3 border-b border-border/50">
               <Button
                 variant="ghost"

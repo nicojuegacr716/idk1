@@ -64,7 +64,7 @@ const GetsCoin = () => {
     }
 
     setPhase("pending");
-    setMessage("Chúng tôi đang xác minh tài khoản, vui lòng đợi và kiểm tra email." );
+    setMessage("Chúng tôi đang xác minh tài khoản, vui lòng đợi và kiểm tra email.");
 
     try {
       const response = await registerMutation.mutateAsync({
@@ -106,131 +106,143 @@ const GetsCoin = () => {
   }, [email, password, confirmed, registerMutation, refresh, walletQuery]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2 text-center">
-        <h1 className="text-3xl font-bold">Gets Coin</h1>
-        <p className="text-muted-foreground">
-          Tạo một tài khoản NVIDIA phụ để nhận nhanh +15 xu vào ví LifeTech4Cloud.
-        </p>
-        {walletQuery.data && (
-          <p className="text-sm text-muted-foreground">
-            Số dư hiện tại: {" "}
-            <Badge variant="secondary" className="font-semibold text-primary">
-              {walletQuery.data.balance} xu
-            </Badge>
+    <div className="space-y-6 sm:space-y-8 overflow-x-hidden">
+      <div className="mx-auto w-full max-w-screen-sm sm:max-w-3xl px-3 sm:px-4">
+        <div className="flex flex-col gap-2 text-center">
+          <h1 className="text-2xl sm:text-3xl font-bold">Gets Coin</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
+            Tạo một tài khoản NVIDIA phụ để nhận nhanh +15 xu vào ví LifeTech4Cloud.
           </p>
-        )}
+          {walletQuery.data && (
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Số dư hiện tại:{" "}
+              <Badge variant="secondary" className="font-semibold text-primary">
+                {walletQuery.data.balance} xu
+              </Badge>
+            </p>
+          )}
+        </div>
+
+        <Card className="glass-card mt-4 sm:mt-6 w-full">
+          <CardHeader className="pb-3 sm:pb-4">
+            <CardTitle className="text-lg sm:text-xl">Hướng dẫn</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
+              Làm theo các bước bên dưới rồi gửi thông tin tài khoản phụ bạn vừa tạo.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="space-y-5 sm:space-y-6">
+            {phase === "idle" && (
+              <>
+                <ol className="list-decimal pl-5 sm:pl-6 space-y-2 sm:space-y-2.5 text-left text-sm">
+                  <li className="leading-relaxed">
+                    Bước 1: Nhấp vào{" "}
+                    <Button
+                      variant="link"
+                      className="px-1 align-baseline"
+                      onClick={handleCopyLink}
+                    >
+                      <LinkIcon className="mr-1 h-4 w-4" /> {REGISTRATION_LINK}
+                    </Button>
+                    {copied && (
+                      <span className="ml-1.5 text-[11px] sm:text-xs text-emerald-500">Đã sao chép</span>
+                    )}
+                  </li>
+                  <li className="leading-relaxed">
+                    Bước 2: Tạo mới một tài khoản mà bạn không dùng cho mục đích khác (gmail/hotmail...).
+                  </li>
+                  <li className="leading-relaxed">
+                    Bước 3: Điền thông tin tài khoản phụ vào form dưới đây và gửi cho hệ thống.
+                  </li>
+                </ol>
+
+                <div className="grid gap-4 text-left">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium" htmlFor="gets-email">
+                      Email đăng ký
+                    </label>
+                    <Input
+                      id="gets-email"
+                      inputMode="email"
+                      className="text-base" /* tránh iOS auto-zoom */
+                      placeholder="ví dụ: yourname@hotmail.com"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium" htmlFor="gets-pass">
+                      Mật khẩu
+                    </label>
+                    <Input
+                      id="gets-pass"
+                      type="password"
+                      className="text-base" /* tránh iOS auto-zoom */
+                      placeholder="Nhập mật khẩu tài khoản phụ"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                    />
+                  </div>
+                  <label className="flex items-start gap-2 text-[13px] sm:text-sm text-muted-foreground">
+                    <Checkbox checked={confirmed} onCheckedChange={(value) => setConfirmed(Boolean(value))} />
+                    <span>Tôi xác nhận đây không phải tài khoản chính và đồng ý chia sẻ với hệ thống.</span>
+                  </label>
+                </div>
+
+                {message && (
+                  <div className="flex items-center gap-2 text-sm text-destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <span className="min-w-0 break-words">{message}</span>
+                  </div>
+                )}
+
+                <Button className="w-full h-11 text-base" onClick={handleSubmit}>
+                  Gửi thông tin
+                </Button>
+              </>
+            )}
+
+            {phase === "pending" && (
+              <div className="space-y-4 text-center text-sm text-muted-foreground">
+                <div className="flex items-center justify-center gap-2 text-primary">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Đang xác thực tài khoản...</span>
+                </div>
+                <p className="px-2">
+                  Nếu bạn nhận được email xác nhận từ NVIDIA, hãy hoàn tất bước xác nhận để hệ thống xử lý nhanh hơn.
+                </p>
+                <Button variant="secondary" onClick={resetForm} className="w-full sm:w-auto">
+                  Nhập lại
+                </Button>
+              </div>
+            )}
+
+            {phase === "done" && (
+              <div className="space-y-4 text-center">
+                <CheckCircle2 className="h-9 w-9 sm:h-10 sm:w-10 text-emerald-500 mx-auto" />
+                <p className="text-base font-semibold">Hoàn tất!</p>
+                <p className="text-sm text-muted-foreground px-2">
+                  Cảm ơn bạn đã hỗ trợ. Bạn có thể gửi thêm tài khoản khác nếu muốn.
+                </p>
+                <Button onClick={resetForm} className="w-full sm:w-auto">
+                  Gửi thêm tài khoản khác
+                </Button>
+              </div>
+            )}
+
+            {phase === "error" && (
+              <div className="space-y-4 text-center text-sm text-muted-foreground">
+                <AlertCircle className="h-9 w-9 sm:h-10 sm:w-10 text-destructive mx-auto" />
+                <p className="text-base font-semibold text-destructive">Gửi thất bại</p>
+                <p className="px-2 break-words">{message}</p>
+                <Button variant="secondary" onClick={resetForm} className="w-full sm:w-auto">
+                  Thử lại
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
-
-      <Card className="glass-card max-w-3xl w-full mx-auto">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-xl">Hướng dẫn</CardTitle>
-          <CardDescription>
-            Làm theo các bước bên dưới rồi gửi thông tin tài khoản phụ bạn vừa tạo.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {phase === "idle" && (
-            <>
-              <ol className="list-decimal pl-6 space-y-2 text-left text-sm md:text-base">
-                <li>
-                  Bước 1: Nhấp vào
-                  <Button variant="link" className="px-1" onClick={handleCopyLink}>
-                    <LinkIcon className="mr-1 h-4 w-4" /> {REGISTRATION_LINK}
-                  </Button>
-                  {copied && (
-                    <span className="ml-2 text-xs text-emerald-500">Đã sao chép</span>
-                  )}
-                </li>
-                <li>
-                  Bước 2: Tạo mới một tài khoản mà bạn không dùng cho mục đích khác (gmail/hotmail...).
-                </li>
-                <li>
-                  Bước 3: Điền thông tin tài khoản phụ vào form dưới đây và gửi cho hệ thống.
-                </li>
-              </ol>
-
-              <div className="grid gap-4 text-left">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium" htmlFor="gets-email">
-                    Email đăng ký
-                  </label>
-                  <Input
-                    id="gets-email"
-                    placeholder="ví dụ: yourname@hotmail.com"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-sm font-medium" htmlFor="gets-pass">
-                    Mật khẩu
-                  </label>
-                  <Input
-                    id="gets-pass"
-                    type="password"
-                    placeholder="Nhập mật khẩu tài khoản phụ"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                  />
-                </div>
-                <label className="flex items-start gap-2 text-sm text-muted-foreground">
-                  <Checkbox checked={confirmed} onCheckedChange={(value) => setConfirmed(Boolean(value))} />
-                  Tôi xác nhận đây không phải tài khoản chính và đồng ý chia sẻ với hệ thống.
-                </label>
-              </div>
-
-              {message && (
-                <div className="flex items-center gap-2 text-sm text-destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <span>{message}</span>
-                </div>
-              )}
-
-              <Button className="w-full h-11 text-base" onClick={handleSubmit}>
-                Gửi thông tin
-              </Button>
-            </>
-          )}
-
-          {phase === "pending" && (
-            <div className="space-y-4 text-center text-sm text-muted-foreground">
-              <div className="flex items-center justify-center gap-2 text-primary">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Đang xác thực tài khoản...</span>
-              </div>
-              <p>
-                Nếu bạn nhận được email xác nhận từ NVIDIA, hãy hoàn tất bước xác nhận để hệ thống xử lý nhanh hơn.
-              </p>
-              <Button variant="secondary" onClick={resetForm}>
-                Nhập lại
-              </Button>
-            </div>
-          )}
-
-          {phase === "done" && (
-            <div className="space-y-4 text-center">
-              <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto" />
-              <p className="text-base font-semibold">Hoàn tất!</p>
-              <p className="text-sm text-muted-foreground">
-                Cảm ơn bạn đã hỗ trợ. Bạn có thể gửi thêm tài khoản khác nếu muốn.
-              </p>
-              <Button onClick={resetForm}>Gửi thêm tài khoản khác</Button>
-            </div>
-          )}
-
-          {phase === "error" && (
-            <div className="space-y-4 text-center text-sm text-muted-foreground">
-              <AlertCircle className="h-10 w-10 text-destructive mx-auto" />
-              <p className="text-base font-semibold text-destructive">Gửi thất bại</p>
-              <p>{message}</p>
-              <Button variant="secondary" onClick={resetForm}>
-                Thử lại
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 };
