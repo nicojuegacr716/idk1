@@ -14,9 +14,10 @@ import {
   stopVpsSession,
   fetchVpsSessionLog,
   deleteVpsSession,
+  fetchVpsAvailability,
   ApiError,
 } from "@/lib/api-client";
-import type { VpsProduct, VpsSession } from "@/lib/types";
+import type { VpsProduct, VpsSession, VpsAvailability } from "@/lib/types";
 import { toast } from "@/components/ui/sonner";
 import { CloudDownload } from "lucide-react";
 
@@ -237,6 +238,19 @@ export default function VPS() {
     staleTime: 10_000,
   });
 
+  // Check availability for selected product
+  const {
+    data: availability,
+    isLoading: availabilityLoading,
+    refetch: refetchAvailability,
+  } = useQuery({
+    queryKey: ["vps-availability", selectedProduct?.id],
+    queryFn: () => fetchVpsAvailability(selectedProduct?.id),
+    enabled: !!selectedProduct,
+    staleTime: 10_000,
+    refetchInterval: 30_000, // Refetch every 30 seconds
+  });
+
   const resetLauncherState = () => {
     setSelectedProduct(null);
     setSelectedVariant(null);
@@ -375,8 +389,22 @@ export default function VPS() {
       toast("Hãy chọn hệ điều hành để tiếp tục.");
       return;
     }
+
+    // Check if VPS creation is available
+    if (availability && !availability.available) {
+      toast(availability.reason || "Không thể tạo VPS tại thời điểm này.");
+      return;
+    }
+
     createSession.mutate({ variant: selectedVariant, productId: selectedProduct.id });
   };
+
+  // Determine if launch button should be disabled
+  const isLaunchDisabled = !selectedProduct ||
+    !selectedVariant ||
+    createSession.isPending ||
+    availabilityLoading ||
+    (availability && !availability.available);
 
   return (
     <div className="space-y-8">
@@ -455,6 +483,25 @@ export default function VPS() {
                     ? "Chọn hệ điều hành bạn muốn dùng cho gói này."
                     : "Chọn gói ở trên để mở tùy chọn hệ điều hành."}
                 </p>
+                {selectedProduct && availability && (
+                  <div className="mt-2 p-2 rounded-md border border-border/40 bg-muted/20">
+                    <div className="flex items-center gap-2 text-xs">
+                      <div className={`w-2 h-2 rounded-full ${availability.available ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                      <span className="font-medium">
+                        {availabilityLoading ? "Đang kiểm tra..." :
+                         availability.available ? "Khả dụng" : "Không khả dụng"}
+                      </span>
+                      {availability.tokens_left !== undefined && (
+                        <span className="text-muted-foreground">
+                          ({availability.tokens_left} token còn lại)
+                        </span>
+                      )}
+                    </div>
+                    {availability.reason && !availability.available && (
+                      <p className="text-xs text-destructive mt-1">{availability.reason}</p>
+                    )}
+                  </div>
+                )}
                 <div className="mt-3 grid gap-4 md:grid-cols-2">
                   {VM_VARIANTS.map((variant) => {
                     const isSelected = selectedVariant === variant;
@@ -510,12 +557,19 @@ export default function VPS() {
               >
                 Hủy
               </Button>
-              <Button onClick={handleLaunch} disabled={!selectedProduct || !selectedVariant || createSession.isPending} className="gap-2">
+              <Button onClick={handleLaunch} disabled={isLaunchDisabled} className="gap-2">
                 {createSession.isPending ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Đang khởi tạo…
                   </>
+                ) : availabilityLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Kiểm tra khả dụng…
+                  </>
+                ) : availability && !availability.available ? (
+                  "Không khả dụng"
                 ) : (
                   "Khởi chạy"
                 )}

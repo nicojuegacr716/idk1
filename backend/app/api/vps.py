@@ -17,6 +17,7 @@ from app.deps import (
 )
 from app.models import User, VpsSession
 from app.services.vps import VpsService
+from app.services.worker_selector import WorkerSelector
 from app.settings import get_settings
 from fastapi.responses import PlainTextResponse
 
@@ -113,6 +114,66 @@ async def list_products(
         for product in products
     ]
     return JSONResponse(data)
+
+
+@router.get("/availability")
+async def check_availability(
+    product_id: str | None = None,
+    db: Session = Depends(get_db),
+    worker_client=Depends(get_worker_client),
+) -> JSONResponse:
+    """Check if VPS creation is available for a product."""
+    if product_id:
+        try:
+            from uuid import UUID
+            product_uuid = UUID(str(product_id))
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid product_id")
+
+        service = VpsService(db)
+        product = service._load_product(product_uuid)
+
+        selector = WorkerSelector(db)
+        worker = selector.select_for_product(product.id)
+        if not worker:
+            return JSONResponse({"available": False, "reason": "No worker available"})
+
+        try:
+            tokens_left = await worker_client.token_left(worker=worker)
+            available = tokens_left > 0
+            return JSONResponse({
+                "available": available,
+                "tokens_left": tokens_left,
+                "reason": None if available else "No tokens available"
+            })
+        except Exception:
+            return JSONResponse({"available": False, "reason": "Unable to check worker status"})
+    else:
+        # Check general availability across all active products
+        service = VpsService(db)
+        products = service.list_products(active_only=True)
+
+        if not products:
+            return JSONResponse({"available": False, "reason": "No active products"})
+
+        selector = WorkerSelector(db)
+        available_products = []
+
+        for product in products:
+            worker = selector.select_for_product(product.id)
+            if worker:
+                try:
+                    tokens_left = await worker_client.token_left(worker=worker)
+                    if tokens_left > 0:
+                        available_products.append(str(product.id))
+                except Exception:
+                    continue
+
+        return JSONResponse({
+            "available": len(available_products) > 0,
+            "available_products": available_products,
+            "reason": None if available_products else "No products available"
+        })
 
 
 @router.get("/sessions")
@@ -282,8 +343,3 @@ def _json_default(value: Any) -> Any:
     if isinstance(value, datetime):
         return value.isoformat()
     return value
-
-
-
-
-

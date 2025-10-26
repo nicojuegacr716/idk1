@@ -539,6 +539,23 @@ export const fetchVpsProducts = async (): Promise<VpsProduct[]> => {
   return apiFetch<VpsProduct[]>("/vps/products");
 };
 
+export const fetchVpsAvailability = async (
+  productId?: string,
+): Promise<{
+  available: boolean;
+  tokens_left?: number;
+  available_products?: string[];
+  reason?: string | null;
+}> => {
+  const query = productId ? `?product_id=${encodeURIComponent(productId)}` : "";
+  return apiFetch<{
+    available: boolean;
+    tokens_left?: number;
+    available_products?: string[];
+    reason?: string | null;
+  }>(`/vps/availability${query}`);
+};
+
 export const fetchVpsSessions = async (): Promise<VpsSession[]> => {
   const data = await apiFetch<{ sessions: VpsSession[] }>("/vps/sessions");
   return data.sessions ?? [];

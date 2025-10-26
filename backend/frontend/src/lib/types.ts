@@ -334,3 +334,10 @@ export interface RewardMetricsSummary {
   failureRatio: number;
   effectiveDailyCap: number;
 }
+
+export interface VpsAvailability {
+  available: boolean;
+  tokens_left?: number;
+  available_products?: string[];
+  reason?: string | null;
+}
