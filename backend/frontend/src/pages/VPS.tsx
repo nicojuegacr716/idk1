@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Server, Plus, Power, RefreshCw, Loader2, ExternalLink, Terminal, StopCircle, Copy, Check } from "lucide-react";
 
@@ -13,6 +13,7 @@ import {
   createVpsSession,
   stopVpsSession,
   fetchVpsSessionLog,
+  deleteVpsSession,
   ApiError,
 } from "@/lib/api-client";
 import type { VpsProduct, VpsSession } from "@/lib/types";
@@ -215,6 +216,7 @@ export default function VPS() {
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<VpsProduct | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<VmVariant | null>(null);
+  const stopFailuresRef = useRef<Map<string, number>>(new Map());
 
   const {
     data: products = [],
@@ -308,13 +310,12 @@ export default function VPS() {
     },
   });
 
-  const stopSession = useMutation({
-    mutationFn: stopVpsSession,
-    onSuccess: (session) => {
-      toast("Đã gửi lệnh dừng.");
+  const deleteSessionMutation = useMutation({
+    mutationFn: deleteVpsSession,
+    onSuccess: () => {
+      toast("Phiên bị xóa sau khi dừng thất bại nhiều lần.");
       refetchSessions();
       queryClient.invalidateQueries({ queryKey: ["vps-sessions"] });
-      queryClient.invalidateQueries({ queryKey: ["vps-session-log", session.id] });
     },
     onError: (error: unknown) => {
       const message =
@@ -322,8 +323,46 @@ export default function VPS() {
           ? error.message
           : error instanceof Error
             ? error.message
+            : "Không thể xóa phiên.";
+      toast(message);
+    },
+  });
+
+  const stopSession = useMutation({
+    mutationFn: stopVpsSession,
+    onSuccess: (session) => {
+      toast("Đã gửi lệnh dừng.");
+      refetchSessions();
+      queryClient.invalidateQueries({ queryKey: ["vps-sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["vps-session-log", session.id] });
+      stopFailuresRef.current.delete(session.id);
+    },
+    onError: (error: unknown, sessionId: string) => {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
             : "Không thể dừng phiên.";
       toast(message);
+
+      const isNetworkError =
+        error instanceof TypeError ||
+        (error instanceof Error && /fetch|network|\brefused\b/i.test(error.message));
+      if (!isNetworkError) {
+        return;
+      }
+      const current = stopFailuresRef.current.get(sessionId) ?? 0;
+      const next = current + 1;
+      stopFailuresRef.current.set(sessionId, next);
+      if (next >= 3) {
+        stopFailuresRef.current.delete(sessionId);
+        deleteSessionMutation.mutate(sessionId, {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["vps-session-log", sessionId] });
+          },
+        });
+      }
     },
   });
 
