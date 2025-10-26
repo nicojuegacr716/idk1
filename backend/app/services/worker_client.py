@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from urllib.parse import urljoin
 
@@ -72,15 +73,59 @@ class WorkerClient:
 
         base = self._base(worker)
         url = urljoin(base + "/", "vm-loso")
-        response = await self._client.post(url, json={"action": action})
+        payload = {"action": action}
+        attempt = 0
+        max_attempts = 3
+        while True:
+            response = await self._client.post(url, json=payload)
+            if response.status_code != status.HTTP_429_TOO_MANY_REQUESTS:
+                break
+            attempt += 1
+            if attempt >= max_attempts:
+                break
+            await asyncio.sleep(1.5 * attempt)
 
-        try:
-            response.raise_for_status()
-        except httpx.HTTPError as exc:
+        if response.status_code >= 400:
+            detail: str | None = None
+            try:
+                error_payload = response.json()
+                if isinstance(error_payload, dict):
+                    raw_detail = (
+                        error_payload.get("detail")
+                        or error_payload.get("error")
+                        or error_payload.get("message")
+                    )
+                    if isinstance(raw_detail, str):
+                        detail = raw_detail.strip() or None
+            except ValueError:
+                if response.text:
+                    detail = response.text.strip()
+
+            if response.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=detail or "Worker is busy, please retry shortly.",
+                )
+
+            if response.status_code == status.HTTP_400_BAD_REQUEST:
+                message = detail or "Worker rejected the request"
+                mapped_status = (
+                    status.HTTP_503_SERVICE_UNAVAILABLE
+                    if "No available tokens" in message or "Server busy" in message
+                    else status.HTTP_400_BAD_REQUEST
+                )
+                raise HTTPException(status_code=mapped_status, detail=message)
+
+            if response.status_code == status.HTTP_401_UNAUTHORIZED:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=detail or "Worker authentication failed",
+                )
+
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Worker creation failed",
-            ) from exc
+                detail=detail or "Worker creation failed",
+            )
 
         data = response.json()
         if not isinstance(data, dict):
