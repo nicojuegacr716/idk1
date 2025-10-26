@@ -108,13 +108,10 @@ class WorkerClient:
                 )
 
             if response.status_code == status.HTTP_400_BAD_REQUEST:
-                message = detail or "Worker rejected the request"
-                mapped_status = (
-                    status.HTTP_503_SERVICE_UNAVAILABLE
-                    if "No available tokens" in message or "Server busy" in message
-                    else status.HTTP_400_BAD_REQUEST
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=detail or "Worker rejected the request"
                 )
-                raise HTTPException(status_code=mapped_status, detail=message)
 
             if response.status_code == status.HTTP_401_UNAUTHORIZED:
                 raise HTTPException(

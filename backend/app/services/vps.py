@@ -256,12 +256,18 @@ class VpsService:
                 if (
                     attempt < MAX_WORKER_RETRIES
                     and detail
-                    and "No available tokens" in detail
+                    and ("No available tokens" in detail or "Server busy" in detail)
                 ):
                     next_worker = _switch_worker()
                     if next_worker:
-                        worker = next_worker
-                        continue
+                        # Check token availability on new worker before retrying
+                        try:
+                            tokens_left = await worker_client.token_left(worker=next_worker)
+                            if tokens_left > 0:
+                                worker = next_worker
+                                continue
+                        except Exception:
+                            pass  # Fall through to refund
                 await self._refund_session(
                     session,
                     wallet_service,
