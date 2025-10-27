@@ -135,14 +135,6 @@ const Giftcode = () => {
               {giftMessage}
             </p>
           )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
-
-export default Giftcode;
-
           <div className="space-y-2">
             <div ref={giftTurnstile.containerRef} className="flex justify-center" />
             {giftTurnstile.error && (
@@ -151,7 +143,14 @@ export default Giftcode;
             {giftTurnstile.configured && !giftTurnstile.error && !giftTurnstile.ready && (
               <p className="text-xs text-muted-foreground flex items-center justify-center gap-2">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Đang tải captcha...
+                Dang tai captcha...
               </p>
             )}
           </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default Giftcode;
