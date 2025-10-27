@@ -219,14 +219,7 @@ export default function VPS() {
   const [selectedProduct, setSelectedProduct] = useState<VpsProduct | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<VmVariant | null>(null);
   const stopFailuresRef = useRef<Map<string, number>>(new Map());
-  const {
-    containerRef: turnstileContainerRef,
-    token: vpsTurnstileToken,
-    error: turnstileError,
-    ready: turnstileReady,
-    reset: resetTurnstile,
-    configured: turnstileConfigured,
-  } = useTurnstile("vps_create");
+  const vpsTurnstile = useTurnstile("vps_create");
 
   const {
     data: products = [],
@@ -263,7 +256,7 @@ export default function VPS() {
   const resetLauncherState = () => {
     setSelectedProduct(null);
     setSelectedVariant(null);
-    resetTurnstile();
+    vpsTurnstile.reset();
   };
 
   useEffect(() => {
@@ -311,14 +304,13 @@ const createSession = useMutation({
     mutationFn: ({
       variant,
       productId,
-      turnstileToken,
-    }: { variant: VmVariant; productId: string; turnstileToken?: string | null }) =>
+    }: { variant: VmVariant; productId: string }) =>
       createVpsSession({
         productId,
         vmType: variant,
         workerAction: VARIANT_ACTIONS[variant],
         idempotencyKey: idempotencyKey(),
-        turnstileToken,
+        turnstileToken: vpsTurnstile.token ?? undefined,
       }),
     onSuccess: (session) => {
       toast("Đã gửi yêu cầu khởi tạo.");
@@ -338,7 +330,7 @@ const createSession = useMutation({
       toast(message);
     },
     onSettled: () => {
-      resetTurnstile();
+      vpsTurnstile.reset();
     },
   });
 
@@ -414,12 +406,12 @@ const createSession = useMutation({
       return;
     }
 
-    if (turnstileConfigured) {
-      if (turnstileError) {
-        toast(turnstileError);
+    if (vpsTurnstile.configured) {
+      if (vpsTurnstile.error) {
+        toast(vpsTurnstile.error);
         return;
       }
-      if (!vpsTurnstileToken) {
+      if (!vpsTurnstile.token) {
         toast("Vui lòng hoàn thành captcha trước khi khởi chạy.");
         return;
       }
@@ -428,7 +420,6 @@ const createSession = useMutation({
     createSession.mutate({
       variant: selectedVariant,
       productId: selectedProduct.id,
-      turnstileToken: vpsTurnstileToken,
     });
   };
 
@@ -438,7 +429,8 @@ const isLaunchDisabled = !selectedProduct ||
     createSession.isPending ||
     availabilityLoading ||
     (availability && !availability.available) ||
-    (turnstileConfigured && (!vpsTurnstileToken || Boolean(turnstileError) || !turnstileReady));
+    (vpsTurnstile.configured &&
+      (!vpsTurnstile.token || Boolean(vpsTurnstile.error) || !vpsTurnstile.ready));
 
   return (
     <div className="space-y-8">
@@ -581,11 +573,11 @@ const isLaunchDisabled = !selectedProduct ||
               </div>
             </div>
             <div className="space-y-2">
-              <div ref={turnstileContainerRef} className="flex justify-center" />
-              {turnstileError && (
-                <p className="text-xs text-destructive text-center">{turnstileError}</p>
+              <div ref={vpsTurnstile.containerRef} className="flex justify-center" />
+              {vpsTurnstile.error && (
+                <p className="text-xs text-destructive text-center">{vpsTurnstile.error}</p>
               )}
-              {turnstileConfigured && !turnstileError && !turnstileReady && (
+              {vpsTurnstile.configured && !vpsTurnstile.error && !vpsTurnstile.ready && (
                 <p className="text-xs text-muted-foreground flex items-center justify-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Đang tải captcha...
