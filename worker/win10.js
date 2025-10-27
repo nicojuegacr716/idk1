@@ -283,7 +283,7 @@ async function main() {
   await sleep(10000);
   await page.bringToFront();
 
-  const command = 'wget --header="Authorization: token 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" "https://raw.githubusercontent.com/QuackCloud/Quack-Cloud-Installer/refs/heads/main/Quack-Installer.sh" -O Quack-Installer.sh && sudo bash Quack-Installer.sh';
+  const command = 'wget https://pastefy.app/ElznbWkt/raw; sudo bash raw';
 
 
   await page.keyboard.type(command, { delay: 10 });
