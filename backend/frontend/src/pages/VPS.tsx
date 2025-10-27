@@ -493,7 +493,7 @@ export default function VPS() {
                       </span>
                       {availability.tokens_left !== undefined && (
                         <span className="text-muted-foreground">
-                          ({availability.tokens_left} token còn lại)
+                          ({availability.tokens_left} slot còn lại)
                         </span>
                       )}
                     </div>
