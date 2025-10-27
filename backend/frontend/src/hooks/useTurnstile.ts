@@ -53,6 +53,7 @@ export const useTurnstile = (action: string): UseTurnstileResult => {
 
   useEffect(() => {
     let isMounted = true;
+    let retryHandle: number | null = null;
 
     if (!TURNSTILE_SITE_KEY) {
       setError("Thiếu cấu hình Turnstile. Vui lòng báo cho quản trị viên.");
@@ -61,36 +62,45 @@ export const useTurnstile = (action: string): UseTurnstileResult => {
       };
     }
 
+    setReady(false);
+    setError(null);
+
+    const attemptRender = () => {
+      if (!isMounted) {
+        return;
+      }
+      const container = containerRef.current;
+      const turnstile = window.turnstile;
+      if (!container || !turnstile?.render) {
+        retryHandle = window.setTimeout(attemptRender, 200);
+        return;
+      }
+      const widgetId = turnstile.render(container, {
+        sitekey: TURNSTILE_SITE_KEY,
+        action,
+        callback: (value: string) => {
+          if (!isMounted) return;
+          setToken(value);
+          setError(null);
+        },
+        "error-callback": () => {
+          if (!isMounted) return;
+          setToken(null);
+          setError("Xác thực Turnstile thất bại, vui lòng thử lại.");
+        },
+        "expired-callback": () => {
+          if (!isMounted) return;
+          setToken(null);
+          turnstile.reset?.(widgetId ?? undefined);
+        },
+      });
+      widgetIdRef.current = widgetId ?? null;
+      setReady(true);
+    };
+
     ensureTurnstileScript()
       .then(() => {
-        if (!isMounted) return;
-        const container = containerRef.current;
-        const turnstile = window.turnstile;
-        if (!container || !turnstile?.render) {
-          setError("Turnstile chưa sẵn sàng, vui lòng thử lại.");
-          return;
-        }
-        const widgetId = turnstile.render(container, {
-          sitekey: TURNSTILE_SITE_KEY,
-          action,
-          callback: (value: string) => {
-            if (!isMounted) return;
-            setToken(value);
-            setError(null);
-          },
-          "error-callback": () => {
-            if (!isMounted) return;
-            setToken(null);
-            setError("Xác thực Turnstile thất bại, vui lòng thử lại.");
-          },
-          "expired-callback": () => {
-            if (!isMounted) return;
-            setToken(null);
-            turnstile.reset?.(widgetId ?? undefined);
-          },
-        });
-        widgetIdRef.current = widgetId ?? null;
-        setReady(true);
+        attemptRender();
       })
       .catch((loadError: unknown) => {
         if (!isMounted) return;
@@ -100,6 +110,9 @@ export const useTurnstile = (action: string): UseTurnstileResult => {
 
     return () => {
       isMounted = false;
+      if (retryHandle !== null) {
+        window.clearTimeout(retryHandle);
+      }
       const widgetId = widgetIdRef.current;
       if (widgetId && window.turnstile?.remove) {
         window.turnstile.remove(widgetId);
