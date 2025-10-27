@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import { redeemGiftCode, ApiError } from "@/lib/api-client";
+import { useTurnstile } from "@/hooks/useTurnstile";
 
 type GiftResult = {
   title: string;
@@ -26,6 +27,14 @@ const Giftcode = () => {
   const [giftCodeInput, setGiftCodeInput] = useState("");
   const [giftMessage, setGiftMessage] = useState<string | null>(null);
   const [giftResult, setGiftResult] = useState<GiftResult | null>(null);
+  const {
+    containerRef: turnstileContainerRef,
+    token: giftTurnstileToken,
+    error: turnstileError,
+    ready: turnstileReady,
+    reset: resetTurnstile,
+    configured: turnstileConfigured,
+  } = useTurnstile("giftcode_redeem");
 
   const redeemMutation = useMutation({
     mutationFn: redeemGiftCode,
@@ -57,6 +66,9 @@ const Giftcode = () => {
       setGiftMessage(detail);
       toast(detail);
     },
+    onSettled: () => {
+      resetTurnstile();
+    },
   });
 
   const handleRedeem = () => {
@@ -66,8 +78,18 @@ const Giftcode = () => {
       setGiftMessage("Vui lòng nhập mã quà hợp lệ.");
       return;
     }
+    if (turnstileConfigured) {
+      if (turnstileError) {
+        toast(turnstileError);
+        return;
+      }
+      if (!giftTurnstileToken) {
+        toast("Vui lòng hoàn thành captcha trước khi đổi mã.");
+        return;
+      }
+    }
     setGiftMessage(null);
-    redeemMutation.mutate({ code: trimmed });
+    redeemMutation.mutate({ code: trimmed, turnstileToken: giftTurnstileToken });
   };
 
   return (
@@ -89,7 +111,10 @@ const Giftcode = () => {
             />
             <Button
               onClick={handleRedeem}
-              disabled={redeemMutation.isLoading}
+              disabled={
+                redeemMutation.isLoading ||
+                (turnstileConfigured && (!giftTurnstileToken || Boolean(turnstileError) || !turnstileReady))
+              }
               className="gap-2"
             >
               {redeemMutation.isLoading ? (
@@ -124,3 +149,15 @@ const Giftcode = () => {
 
 export default Giftcode;
 
+          <div className="space-y-2">
+            <div ref={turnstileContainerRef} className="flex justify-center" />
+            {turnstileError && (
+              <p className="text-xs text-destructive text-center">{turnstileError}</p>
+            )}
+            {turnstileConfigured && !turnstileError && !turnstileReady && (
+              <p className="text-xs text-muted-foreground flex items-center justify-center gap-2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Đang tải captcha...
+              </p>
+            )}
+          </div>

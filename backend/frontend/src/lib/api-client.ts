@@ -566,6 +566,7 @@ type CreateVpsSessionParams = {
   vmType: "linux" | "windows" | "dummy";
   idempotencyKey: string;
   workerAction?: number;
+  turnstileToken?: string | null;
 };
 
 export const createVpsSession = async ({
@@ -573,6 +574,7 @@ export const createVpsSession = async ({
   vmType,
   idempotencyKey,
   workerAction,
+  turnstileToken,
 }: CreateVpsSessionParams): Promise<VpsSession> => {
   const payloadBody: Record<string, unknown> = {
     product_id: productId,
@@ -580,6 +582,9 @@ export const createVpsSession = async ({
   };
   if (typeof workerAction === "number") {
     payloadBody.worker_action = workerAction;
+  }
+  if (turnstileToken) {
+    payloadBody.turnstileToken = turnstileToken;
   }
   const payload = JSON.stringify(payloadBody);
   const headers = {
@@ -1077,6 +1082,7 @@ export const deleteAdminGiftCode = async (
 
 export const redeemGiftCode = async (payload: {
   code: string;
+  turnstileToken?: string | null;
 }): Promise<{
   ok: boolean;
   message: string;
@@ -1086,7 +1092,13 @@ export const redeemGiftCode = async (payload: {
   code: string;
   remaining: number;
 }> => {
-  const body = JSON.stringify(payload);
+  const bodyPayload: Record<string, unknown> = {
+    code: payload.code,
+  };
+  if (payload.turnstileToken) {
+    bodyPayload.turnstileToken = payload.turnstileToken;
+  }
+  const body = JSON.stringify(bodyPayload);
   return apiFetch<{
     ok: boolean;
     message: string;

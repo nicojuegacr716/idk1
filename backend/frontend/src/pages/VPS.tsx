@@ -20,6 +20,7 @@ import {
 import type { VpsProduct, VpsSession, VpsAvailability } from "@/lib/types";
 import { toast } from "@/components/ui/sonner";
 import { CloudDownload } from "lucide-react";
+import { useTurnstile } from "@/hooks/useTurnstile";
 
 type VmVariant = "linux" | "windows";
 
@@ -218,6 +219,14 @@ export default function VPS() {
   const [selectedProduct, setSelectedProduct] = useState<VpsProduct | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<VmVariant | null>(null);
   const stopFailuresRef = useRef<Map<string, number>>(new Map());
+  const {
+    containerRef: turnstileContainerRef,
+    token: vpsTurnstileToken,
+    error: turnstileError,
+    ready: turnstileReady,
+    reset: resetTurnstile,
+    configured: turnstileConfigured,
+  } = useTurnstile("vps_create");
 
   const {
     data: products = [],
@@ -254,6 +263,7 @@ export default function VPS() {
   const resetLauncherState = () => {
     setSelectedProduct(null);
     setSelectedVariant(null);
+    resetTurnstile();
   };
 
   useEffect(() => {
@@ -297,13 +307,18 @@ export default function VPS() {
     });
   }, [visibleSessions]);
 
-  const createSession = useMutation({
-    mutationFn: ({ variant, productId }: { variant: VmVariant; productId: string }) =>
+const createSession = useMutation({
+    mutationFn: ({
+      variant,
+      productId,
+      turnstileToken,
+    }: { variant: VmVariant; productId: string; turnstileToken?: string | null }) =>
       createVpsSession({
         productId,
         vmType: variant,
         workerAction: VARIANT_ACTIONS[variant],
         idempotencyKey: idempotencyKey(),
+        turnstileToken,
       }),
     onSuccess: (session) => {
       toast("Đã gửi yêu cầu khởi tạo.");
@@ -321,6 +336,9 @@ export default function VPS() {
       }
       const message = error instanceof Error ? error.message : "Không thể khởi tạo VPS.";
       toast(message);
+    },
+    onSettled: () => {
+      resetTurnstile();
     },
   });
 
@@ -396,15 +414,31 @@ export default function VPS() {
       return;
     }
 
-    createSession.mutate({ variant: selectedVariant, productId: selectedProduct.id });
+    if (turnstileConfigured) {
+      if (turnstileError) {
+        toast(turnstileError);
+        return;
+      }
+      if (!vpsTurnstileToken) {
+        toast("Vui lòng hoàn thành captcha trước khi khởi chạy.");
+        return;
+      }
+    }
+
+    createSession.mutate({
+      variant: selectedVariant,
+      productId: selectedProduct.id,
+      turnstileToken: vpsTurnstileToken,
+    });
   };
 
   // Determine if launch button should be disabled
-  const isLaunchDisabled = !selectedProduct ||
+const isLaunchDisabled = !selectedProduct ||
     !selectedVariant ||
     createSession.isPending ||
     availabilityLoading ||
-    (availability && !availability.available);
+    (availability && !availability.available) ||
+    (turnstileConfigured && (!vpsTurnstileToken || Boolean(turnstileError) || !turnstileReady));
 
   return (
     <div className="space-y-8">
@@ -545,6 +579,18 @@ export default function VPS() {
                   })}
                 </div>
               </div>
+            </div>
+            <div className="space-y-2">
+              <div ref={turnstileContainerRef} className="flex justify-center" />
+              {turnstileError && (
+                <p className="text-xs text-destructive text-center">{turnstileError}</p>
+              )}
+              {turnstileConfigured && !turnstileError && !turnstileReady && (
+                <p className="text-xs text-muted-foreground flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Đang tải captcha...
+                </p>
+              )}
             </div>
             <DialogFooter className="flex justify-end gap-3">
               <Button

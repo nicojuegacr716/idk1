@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.deps import get_ads_nonce_manager, get_current_user, get_db
 from app.models import User
 from app.services.ads import AdsService, PrepareContext, AdsNonceManager, compute_device_hash
+from app.services.turnstile import verify_turnstile_token
 from app.services.wallet import WalletService
 from app.settings import get_settings
 from app.services.worker_client import WorkerClient
@@ -34,6 +35,7 @@ class RegisterTokenRequest(BaseModel):
     email: str
     password: str
     confirm: bool = Field(default=False)
+    turnstile_token: str | None = Field(None, alias="turnstileToken")
 
 
 def _client_ip(request: Request) -> str:
@@ -79,6 +81,7 @@ def _collect_hints(request: Request, payload: PrepareRequest) -> Dict[str, str]:
             if value:
                 hints[key] = value
     return hints
+
 
 
 def _ads_service(request: Request, db: Session, nonce_manager: AdsNonceManager) -> AdsService:
@@ -198,6 +201,12 @@ async def register_worker_token_for_coin(
 ) -> Dict[str, object]:
     if not payload.confirm:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="confirmation_required")
+    await verify_turnstile_token(
+        request=request,
+        token=payload.turnstile_token,
+        action="register_worker",
+        remote_ip=_client_ip(request),
+    )
     registry = WorkerRegistryService(db)
     workers: list[Worker] = registry.list_workers()
     candidates = [w for w in workers if w.status == "active"]

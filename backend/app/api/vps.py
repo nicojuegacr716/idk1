@@ -18,6 +18,7 @@ from app.deps import (
 from app.models import User, VpsSession
 from app.services.vps import VpsService
 from app.services.worker_selector import WorkerSelector
+from app.services.turnstile import verify_turnstile_token
 from app.settings import get_settings
 from fastapi.responses import PlainTextResponse
 
@@ -25,6 +26,14 @@ from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/vps", tags=["vps"])
 
+
+def _client_ip(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "0.0.0.0"
 
 
 def _checklist_items(session: VpsSession) -> List[Dict[str, Any]]:
@@ -198,6 +207,13 @@ async def purchase_and_create(
     worker_client=Depends(get_worker_client),
 ) -> JSONResponse:
     settings = get_settings()
+    turnstile_token = payload.get("turnstile_token") or payload.get("turnstileToken")
+    await verify_turnstile_token(
+        request=request,
+        token=turnstile_token,
+        action="vps_create",
+        remote_ip=_client_ip(request),
+    )
     idempotency_key = request.headers.get("Idempotency-Key")
     if not idempotency_key:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Thi?u Idempotency-Key")
