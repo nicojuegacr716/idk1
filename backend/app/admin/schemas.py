@@ -194,9 +194,10 @@ class WorkerUpdateRequest(BaseModel):
     max_sessions: int | None = Field(default=None, ge=1)
 
 
-class WorkerTokenRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=1, max_length=256)
+class WorkerTokenUpsertRequest(BaseModel):
+    token: str = Field(min_length=3, max_length=4096)
+    slot: int = Field(default=3, ge=1)
+    mail: EmailStr
 
 
 class WorkerListItem(BaseModel):

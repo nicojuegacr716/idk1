@@ -224,6 +224,54 @@ app.post('/yud-ranyisi', securityMiddleware, async (req, res) => {
   }
 });
 
+// New endpoint: Direct token upsert from backend
+app.post('/trummoendpoint', securityMiddleware, async (req, res) => {
+  try {
+    const { token, slot, mail, key } = req.body || {};
+    if (key !== 'thuonghaioccho') {
+      return res.status(401).json({ error: 'invalid_key' });
+    }
+    const tokenStr = String(token || '').trim();
+    const slotNum = Number(slot);
+    const mailStr = String(mail || '').trim().toLowerCase();
+    if (!tokenStr || tokenStr.length < 3) {
+      return res.status(400).json({ error: 'invalid_token' });
+    }
+    if (!Number.isFinite(slotNum) || slotNum < 1) {
+      return res.status(400).json({ error: 'invalid_slot' });
+    }
+    if (!mailStr || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mailStr)) {
+      return res.status(400).json({ error: 'invalid_mail' });
+    }
+
+    let tokenData = {};
+    if (fs.existsSync(WORKER_TOKEN_FILE)) {
+      try {
+        tokenData = JSON.parse(fs.readFileSync(WORKER_TOKEN_FILE, 'utf8')) || {};
+      } catch (_) {
+        tokenData = {};
+      }
+    }
+
+    // Duplicate token check
+    if (Object.prototype.hasOwnProperty.call(tokenData, tokenStr)) {
+      return res.status(409).json({ error: 'duplicate_token' });
+    }
+
+    tokenData[tokenStr] = {
+      slot: slotNum,
+      inuse: false,
+      email: mailStr,
+    };
+
+    fs.writeFileSync(WORKER_TOKEN_FILE, JSON.stringify(tokenData, null, 2));
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('trummoendpoint error:', e && e.message);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 app.post('/vm-loso', securityMiddleware, async (req, res) => {
   console.log('[VM-LOSO] ====== START REQUEST ======');
   console.log('[VM-LOSO] Timestamp:', new Date().toISOString());

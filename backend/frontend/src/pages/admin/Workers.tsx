@@ -101,7 +101,7 @@ export default function Workers() {
   const [detailWorkerId, setDetailWorkerId] = useState<string | null>(null);
   const [healthStatus, setHealthStatus] = useState<WorkerHealthStatus | null>(null);
   const [tokenWorker, setTokenWorker] = useState<WorkerInfo | null>(null);
-  const [tokenForm, setTokenForm] = useState({ email: "", password: "" });
+  const [tokenForm, setTokenForm] = useState({ token: "", slot: 3, mail: "" });
   const [restartTarget, setRestartTarget] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
@@ -254,20 +254,21 @@ export default function Workers() {
   });
 
   const tokenMutation = useMutation({
-    mutationFn: ({ workerId, email, password }: { workerId: string; email: string; password: string }) =>
-      requestWorkerToken(workerId, { email, password }),
+    mutationFn: ({ workerId, token, slot, mail }: { workerId: string; token: string; slot: number; mail: string }) =>
+      requestWorkerToken(workerId, { token, slot, mail }),
     onSuccess: () => {
-      toast("Worker đang lấy session token mới.");
+      toast("OK: Token đã được ghi vào worker.");
       setTokenWorker(null);
-      setTokenForm({ email: "", password: "" });
+      setTokenForm({ token: "", slot: 3, mail: "" });
     },
     onError: (error: unknown) => {
-      const message =
-        error instanceof ApiError
-          ? error.message
-          : error instanceof Error
-            ? error.message
-            : "Yêu cầu token cho worker thất bại.";
+      let message = "Yêu cầu token cho worker thất bại.";
+      if (error instanceof ApiError) {
+        if (error.status === 409) message = "Token đã tồn tại trên worker (duplicate).";
+        else message = error.message;
+      } else if (error instanceof Error) {
+        message = error.message;
+      }
       toast(message);
     },
   });
@@ -441,7 +442,7 @@ export default function Workers() {
                       className="gap-2"
                       onClick={() => {
                         setTokenWorker(worker);
-                        setTokenForm({ email: "", password: "" });
+                        setTokenForm({ token: "", slot: 3, mail: "" });
                       }}
                       disabled={tokenMutation.isLoading && tokenWorker?.id === worker.id}
                     >
@@ -535,31 +536,37 @@ export default function Workers() {
       >
         <DialogContent className="glass-card max-w-md">
           <DialogHeader>
-            <DialogTitle>Yêu cầu session token cho worker</DialogTitle>
-            <DialogDescription>
-              Cung cấp thông tin NVIDIA Learn để worker làm mới <code>sessionid</code>.
-            </DialogDescription>
+            <DialogTitle>Thêm token thủ công cho worker</DialogTitle>
+            <DialogDescription>Nhập token/slot/mail để ghi vào worker (server-side).</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleTokenSubmit} className="space-y-4">
             <div className="grid gap-2">
-              <Label htmlFor="token-email">Email</Label>
+              <Label htmlFor="token-token">Token</Label>
               <Input
-                id="token-email"
-                type="email"
-                autoComplete="username"
-                value={tokenForm.email}
-                onChange={(event) => setTokenForm((prev) => ({ ...prev, email: event.target.value }))}
+                id="token-token"
+                value={tokenForm.token}
+                onChange={(event) => setTokenForm((prev) => ({ ...prev, token: event.target.value }))}
                 required
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="token-password">Mật khẩu</Label>
+              <Label htmlFor="token-slot">Slot</Label>
               <Input
-                id="token-password"
-                type="password"
-                autoComplete="current-password"
-                value={tokenForm.password}
-                onChange={(event) => setTokenForm((prev) => ({ ...prev, password: event.target.value }))}
+                id="token-slot"
+                type="number"
+                min={1}
+                value={tokenForm.slot}
+                onChange={(event) => setTokenForm((prev) => ({ ...prev, slot: Math.max(1, Number(event.target.value) || 1) }))}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="token-mail">Mail</Label>
+              <Input
+                id="token-mail"
+                type="email"
+                value={tokenForm.mail}
+                onChange={(event) => setTokenForm((prev) => ({ ...prev, mail: event.target.value }))}
                 required
               />
             </div>

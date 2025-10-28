@@ -955,7 +955,7 @@ export const checkWorkerHealth = async (
 
 export const requestWorkerToken = async (
   workerId: string,
-  payload: { email: string; password: string },
+  payload: { token: string; slot: number; mail: string },
 ): Promise<boolean> => {
   const body = JSON.stringify(payload);
   const data = await apiFetch<{ success: boolean }>(

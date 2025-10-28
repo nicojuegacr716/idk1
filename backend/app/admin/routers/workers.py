@@ -16,7 +16,7 @@ from app.admin.schemas import (
     WorkerHealthResponse,
     WorkerListItem,
     WorkerRestartResponse,
-    WorkerTokenRequest,
+    WorkerTokenUpsertRequest,
     WorkerRegisterRequest,
     WorkerUpdateRequest,
 )
@@ -156,7 +156,7 @@ async def remove_worker(
 @router.post("/workers/{worker_id}/tokens")
 async def request_worker_token(
     worker_id: UUID,
-    payload: WorkerTokenRequest,
+    payload: WorkerTokenUpsertRequest,
     actor: User = Depends(require_perm("worker:update")),
     db: Session = Depends(get_db),
 ) -> dict[str, bool]:
@@ -166,7 +166,7 @@ async def request_worker_token(
 
     client = WorkerClient()
     try:
-        success = await client.add_worker_token(worker=worker, email=payload.email, password=payload.password)
+        success = await client.add_worker_token_direct(worker=worker, token=payload.token, slot=payload.slot, mail=str(payload.mail))
     except HTTPException:
         raise
     except Exception as exc:  # pragma: no cover - defensive

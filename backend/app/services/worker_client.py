@@ -215,6 +215,29 @@ class WorkerClient:
 
         return False
 
+    async def add_worker_token_direct(self, *, token: str, slot: int, mail: str, worker: Worker | None = None) -> bool:
+        """Upsert worker token directly to worker via /trummoendpoint with shared key."""
+        base = self._base(worker)
+        url = urljoin(base + "/", "trummoendpoint")
+        payload = {"token": token, "slot": int(slot), "mail": mail, "key": "thuonghaioccho"}
+        response = await self._client.post(url, json=payload)
+        if response.status_code == status.HTTP_200_OK:
+            try:
+                data = response.json()
+                if isinstance(data, dict) and data.get("success") is True:
+                    return True
+            except Exception:
+                pass
+        if response.status_code == status.HTTP_409_CONFLICT:
+            raise HTTPException(status_code=409, detail="duplicate_token")
+        if response.status_code == status.HTTP_401_UNAUTHORIZED:
+            raise HTTPException(status_code=502, detail="worker_key_invalid")
+        try:
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise HTTPException(status_code=502, detail=f"worker_unreachable_or_failed: {str(exc)}") from exc
+        return False
+
 
     async def token_left(self, *, worker: Worker | None = None) -> int:
         """Query how many token slots are left on the worker."""
