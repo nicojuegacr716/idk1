@@ -149,6 +149,10 @@ async def remove_worker(
 ) -> None:
     service = WorkerRegistryService(db)
     context = _audit_context(request, actor)
+    # Ensure no active sessions; if any lingering sessions with non-active status, force mark deleted
+    active_sessions = service.list_active_sessions(worker_id)
+    if active_sessions:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Worker still has active sessions.")
     service.delete_worker(worker_id, context=context)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -182,6 +186,22 @@ async def request_worker_token(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Worker did not confirm token creation",
         )
+    # audit (mask token)
+    masked = f"{payload.token[:6]}...{payload.token[-4:]}" if len(payload.token) > 10 else "***"
+    context = _audit_context(request, actor)
+    try:
+        record_audit(
+            db,
+            context=context,
+            action="worker.token.upsert",
+            target_type="worker",
+            target_id=str(worker.id),
+            before=None,
+            after={"mail": str(payload.mail), "slot": payload.slot, "token_mask": masked},
+        )
+        db.commit()
+    except Exception:
+        pass
 
     return {"success": True}
 
