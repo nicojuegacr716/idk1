@@ -131,6 +131,7 @@ class VpsService:
         worker_client: WorkerClient,
         callback_base: str,  # kept for backwards compatibility
         worker_action: int | None = None,
+        worker_id: UUID | None = None,
     ) -> tuple[VpsSession, bool]:
         _ = callback_base  # placeholder – callbacks handled server-to-server
         key = idempotency_key.strip()

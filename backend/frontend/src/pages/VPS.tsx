@@ -218,6 +218,7 @@ export default function VPS() {
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<VpsProduct | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<VmVariant | null>(null);
+  const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
   const stopFailuresRef = useRef<Map<string, number>>(new Map());
   const vpsTurnstile = useTurnstile("vps_create");
 
@@ -406,6 +407,21 @@ const createSession = useMutation({
       return;
     }
 
+    // Kiểm tra xem đã chọn worker chưa
+    if (availability?.workers?.length > 0 && !selectedWorkerId) {
+      toast("Vui lòng chọn worker để tạo VPS.");
+      return;
+    }
+
+    // Kiểm tra xem worker đã chọn có khả dụng không
+    if (selectedWorkerId) {
+      const selectedWorker = availability?.workers?.find(w => w.id === selectedWorkerId);
+      if (selectedWorker && !selectedWorker.available) {
+        toast("Worker đã chọn không khả dụng. Vui lòng chọn worker khác.");
+        return;
+      }
+    }
+
     if (vpsTurnstile.configured) {
       if (vpsTurnstile.error) {
         toast(vpsTurnstile.error);
@@ -420,6 +436,7 @@ const createSession = useMutation({
     createSession.mutate({
       variant: selectedVariant,
       productId: selectedProduct.id,
+      workerId: selectedWorkerId,
     });
   };
 
@@ -511,18 +528,47 @@ const isLaunchDisabled = !selectedProduct ||
                 </p>
                 {selectedProduct && availability && (
                   <div className="mt-2 p-2 rounded-md border border-border/40 bg-muted/20">
-                    <div className="flex items-center gap-2 text-xs">
+                    <div className="flex items-center gap-2 text-xs mb-2">
                       <div className={`w-2 h-2 rounded-full ${availability.available ? 'bg-green-500' : 'bg-red-500'}`}></div>
                       <span className="font-medium">
                         {availabilityLoading ? "Đang kiểm tra..." :
-                         availability.available ? "Khả dụng" : "Không khả dụng"}
+                          availability.available
+                            ? "Có thể tạo VPS với các worker sau:"
+                            : "Không thể tạo VPS tại thời điểm này"
+                        }
                       </span>
-                      {availability.tokens_left !== undefined && (
-                        <span className="text-muted-foreground">
-                          ({availability.tokens_left} slot còn lại)
-                        </span>
-                      )}
                     </div>
+                    
+                    {availability.workers && availability.workers.length > 0 && (
+                      <div className="space-y-2 mt-2">
+                        <p className="text-xs font-medium">Chọn worker để tạo VPS:</p>
+                        <div className="space-y-1.5">
+                          {availability.workers.map((worker) => (
+                            <div 
+                              key={worker.id}
+                              className={`flex items-center justify-between p-1.5 rounded-md border ${
+                                selectedWorkerId === worker.id 
+                                  ? 'border-primary bg-primary/5' 
+                                  : 'border-border/40 hover:border-primary/40 hover:bg-primary/5'
+                              } cursor-pointer transition-colors`}
+                              onClick={() => setSelectedWorkerId(worker.id)}
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${worker.available ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                <span className="text-xs font-medium">{worker.name}</span>
+                              </div>
+                              <span className="text-xs">
+                                {worker.tokens_left > 0 
+                                  ? `${worker.tokens_left} token khả dụng` 
+                                  : worker.tokens_left === -1 
+                                    ? "Không thể kiểm tra" 
+                                    : "Hết token"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {availability.reason && !availability.available && (
                       <p className="text-xs text-destructive mt-1">{availability.reason}</p>
                     )}

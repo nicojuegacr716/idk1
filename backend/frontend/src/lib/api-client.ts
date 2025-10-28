@@ -546,6 +546,12 @@ export const fetchVpsAvailability = async (
   tokens_left?: number;
   available_products?: string[];
   reason?: string | null;
+  workers?: Array<{
+    id: string;
+    name: string;
+    tokens_left: number;
+    available: boolean;
+  }>;
 }> => {
   const query = productId ? `?product_id=${encodeURIComponent(productId)}` : "";
   return apiFetch<{
@@ -553,6 +559,12 @@ export const fetchVpsAvailability = async (
     tokens_left?: number;
     available_products?: string[];
     reason?: string | null;
+    workers?: Array<{
+      id: string;
+      name: string;
+      tokens_left: number;
+      available: boolean;
+    }>;
   }>(`/vps/availability${query}`);
 };
 

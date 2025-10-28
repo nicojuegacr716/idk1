@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, Loader2, Link as LinkIcon } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +22,9 @@ const GetsCoin = () => {
   const [copied, setCopied] = useState(false);
   const [phase, setPhase] = useState<RegisterPhase>("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const [workers, setWorkers] = useState<any[]>([]);
+  const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
+  const [loadingWorkers, setLoadingWorkers] = useState<boolean>(false);
   const {
     containerRef: captchaContainerRef,
     token: turnstileToken,
@@ -38,6 +41,28 @@ const GetsCoin = () => {
   });
 
   const registerMutation = useMutation({ mutationFn: registerWorkerTokenForCoin });
+
+  useEffect(() => {
+    const fetchAvailableWorkers = async () => {
+      setLoadingWorkers(true);
+      try {
+        const response = await fetch('/api/getscoin/workers');
+        if (response.ok) {
+          const data = await response.json();
+          setWorkers(data.workers || []);
+          if (data.workers?.length > 0) {
+            setSelectedWorkerId(data.workers[0].id);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching workers:', error);
+      } finally {
+        setLoadingWorkers(false);
+      }
+    };
+    
+    fetchAvailableWorkers();
+  }, []);
 
   const handleCopyLink = useCallback(async () => {
     try {
@@ -71,6 +96,10 @@ const GetsCoin = () => {
       setMessage("Bạn cần xác nhận đây không phải tài khoản chính của mình.");
       return;
     }
+    if (workers.length > 0 && !selectedWorkerId) {
+      setMessage("Vui lòng chọn worker để gửi token.");
+      return;
+    }
     if (captchaConfigured && !turnstileToken) {
       setMessage("Vui lòng hoàn thành Cloudflare Turnstile trước khi gửi.");
       return;
@@ -85,6 +114,7 @@ const GetsCoin = () => {
         password: trimmedPassword,
         confirm: true,
         turnstileToken,
+        workerId: selectedWorkerId
       });
       resetTurnstile();
 
@@ -119,7 +149,7 @@ const GetsCoin = () => {
         setMessage("Không thể xử lý yêu cầu. Vui lòng thử lại.");
       }
     }
-  }, [email, password, confirmed, registerMutation, refresh, walletQuery, turnstileToken, resetTurnstile]);
+  }, [email, password, confirmed, selectedWorkerId, workers, registerMutation, refresh, walletQuery, turnstileToken, resetTurnstile]);
 
   return (
     <div className="space-y-6 sm:space-y-8 overflow-x-hidden">
@@ -199,10 +229,56 @@ const GetsCoin = () => {
                       onChange={(event) => setPassword(event.target.value)}
                     />
                   </div>
-                  <label className="flex items-start gap-2 text-[13px] sm:text-sm text-muted-foreground">
-                    <Checkbox checked={confirmed} onCheckedChange={(value) => setConfirmed(Boolean(value))} />
-                    <span>Tôi xác nhận đây không phải tài khoản chính và đồng ý chia sẻ với hệ thống.</span>
-                  </label>
+                  <div className="space-y-4">
+                    {/* Worker selection */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium leading-none">
+                        Chọn worker để gửi token:
+                      </label>
+                      {loadingWorkers ? (
+                        <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Đang tải danh sách worker...</span>
+                        </div>
+                      ) : workers.length > 0 ? (
+                        <div className="space-y-1.5 max-h-40 overflow-y-auto rounded-md border border-border/40 p-1">
+                          {workers.map((worker) => (
+                            <div
+                              key={worker.id}
+                              className={`flex items-center justify-between p-1.5 rounded-md border ${
+                                selectedWorkerId === worker.id
+                                  ? 'border-primary bg-primary/5'
+                                  : 'border-border/40 hover:border-primary/40 hover:bg-primary/5'
+                              } cursor-pointer transition-colors`}
+                              onClick={() => setSelectedWorkerId(worker.id)}
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${worker.tokens_left > 0 ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                <span className="text-xs font-medium">{worker.name}</span>
+                              </div>
+                              <span className="text-xs">
+                                {worker.tokens_left > 0
+                                  ? `${worker.tokens_left} token khả dụng`
+                                  : worker.tokens_left === -1
+                                    ? "Không thể kiểm tra"
+                                    : "Hết token"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-muted-foreground">
+                          Không có worker nào khả dụng
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Confirmation checkbox */}
+                    <label className="flex items-start gap-2 text-[13px] sm:text-sm text-muted-foreground">
+                      <Checkbox checked={confirmed} onCheckedChange={(value) => setConfirmed(Boolean(value))} />
+                      <span>Tôi xác nhận đây không phải tài khoản chính và đồng ý chia sẻ với hệ thống.</span>
+                    </label>
+                  </div>
                 </div>
 
                 <div className="space-y-2">

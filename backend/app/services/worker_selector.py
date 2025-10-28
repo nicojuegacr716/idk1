@@ -31,6 +31,25 @@ class WorkerSelector:
             return list(workers)
         return [worker for worker in workers if worker.id not in exclude]
 
+    def get_all_workers_for_product(self, product_id, *, exclude: Optional[Set] = None) -> list[Worker]:
+        """Lấy tất cả worker cho một sản phẩm cụ thể."""
+        stmt = (
+            select(Worker)
+            .join(vps_product_workers, Worker.id == vps_product_workers.c.worker_id)
+            .where(vps_product_workers.c.product_id == product_id)
+            .where(Worker.status == "active")
+            .order_by(Worker.created_at.desc())
+        )
+        workers = self._filter_excluded(list(self.db.scalars(stmt)), exclude)
+        if not workers:
+            fallback_stmt = (
+                select(Worker)
+                .where(Worker.status == "active")
+                .order_by(Worker.created_at.desc())
+            )
+            workers = self._filter_excluded(list(self.db.scalars(fallback_stmt)), exclude)
+        return workers
+
     def select_for_product(self, product_id, *, exclude: Optional[Set] = None) -> Optional[Worker]:
         stmt = (
             select(Worker)
@@ -73,6 +92,11 @@ class WorkerSelector:
         min_active = min(active for _, active in candidates)
         least_loaded = [worker for worker, active in candidates if active == min_active]
         return random.choice(least_loaded)
+        
+    def get_worker_by_id(self, worker_id) -> Optional[Worker]:
+        """Get a worker by its ID."""
+        stmt = select(Worker).where(Worker.id == worker_id).where(Worker.status == "active")
+        return self.db.scalar(stmt)
 
 
 __all__ = ["WorkerSelector"]

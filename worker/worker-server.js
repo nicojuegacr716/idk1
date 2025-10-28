@@ -182,7 +182,8 @@ app.post('/yud-ranyisi', securityMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'domain_not_supported' });
     }
 
-    if (local.includes('.') || local.includes('+')) {
+    // Cho phép dot trick và plus trick cho hotmail.com, nhưng không cho phép cho các domain khác
+    if ((local.includes('.') || local.includes('+')) && domain !== 'hotmail.com') {
       return res.status(400).json({ error: 'dottrick_not_allowed' });
     }
   } catch (e) {

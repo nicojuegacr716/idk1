@@ -143,20 +143,42 @@ async def check_availability(
         product = service._load_product(product_uuid)
 
         selector = WorkerSelector(db)
-        worker = selector.select_for_product(product.id)
-        if not worker:
-            return JSONResponse({"available": False, "reason": "No worker available"})
+        # Lấy tất cả worker cho sản phẩm thay vì chỉ một worker
+        workers = selector.get_all_workers_for_product(product.id)
+        if not workers:
+            return JSONResponse({"available": False, "reason": "No worker available", "workers": []})
 
-        try:
-            tokens_left = await worker_client.token_left(worker=worker)
-            available = tokens_left > 0
-            return JSONResponse({
-                "available": available,
-                "tokens_left": tokens_left,
-                "reason": None if available else "No tokens available"
-            })
-        except Exception:
-            return JSONResponse({"available": False, "reason": "Unable to check worker status"})
+        available_workers = []
+        total_tokens = 0
+        for worker in workers:
+            try:
+                tokens_left = await worker_client.token_left(worker=worker)
+                worker_available = tokens_left > 0
+                if worker_available:
+                    total_tokens += tokens_left
+                available_workers.append({
+                    "id": str(worker.id),
+                    "name": worker.name,
+                    "tokens_left": tokens_left,
+                    "available": worker_available
+                })
+            except Exception:
+                available_workers.append({
+                    "id": str(worker.id),
+                    "name": worker.name,
+                    "tokens_left": -1,
+                    "available": False,
+                    "error": "Unable to check worker status"
+                })
+
+        # Kiểm tra xem có ít nhất một worker khả dụng không
+        available = any(w["available"] for w in available_workers)
+        return JSONResponse({
+            "available": available,
+            "workers": available_workers,
+            "tokens_left": total_tokens,
+            "reason": None if available else "No tokens available"
+        })
     else:
         # Check general availability across all active products
         service = VpsService(db)
@@ -167,20 +189,42 @@ async def check_availability(
 
         selector = WorkerSelector(db)
         available_products = []
+        all_workers = []
+        total_tokens = 0
 
         for product in products:
-            worker = selector.select_for_product(product.id)
-            if worker:
-                try:
-                    tokens_left = await worker_client.token_left(worker=worker)
-                    if tokens_left > 0:
-                        available_products.append(str(product.id))
-                except Exception:
-                    continue
+            workers = selector.get_all_workers_for_product(product.id)
+            for worker in workers:
+                if worker:
+                    try:
+                        tokens_left = await worker_client.token_left(worker=worker)
+                        worker_available = tokens_left > 0
+                        if worker_available:
+                            total_tokens += tokens_left
+                            if str(product.id) not in available_products:
+                                available_products.append(str(product.id))
+                        all_workers.append({
+                            "id": str(worker.id),
+                            "name": worker.name,
+                            "product_id": str(product.id),
+                            "tokens_left": tokens_left,
+                            "available": worker_available
+                        })
+                    except Exception:
+                        all_workers.append({
+                            "id": str(worker.id),
+                            "name": worker.name,
+                            "product_id": str(product.id),
+                            "tokens_left": -1,
+                            "available": False,
+                            "error": "Unable to check worker status"
+                        })
 
         return JSONResponse({
             "available": len(available_products) > 0,
             "available_products": available_products,
+            "workers": all_workers,
+            "tokens_left": total_tokens,
             "reason": None if available_products else "No products available"
         })
 
@@ -216,14 +260,14 @@ async def purchase_and_create(
     )
     idempotency_key = request.headers.get("Idempotency-Key")
     if not idempotency_key:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Thi?u Idempotency-Key")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Thiếu Idempotency-Key")
     product_id = payload.get("product_id")
     if not product_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Thi?u product_id")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Thiếu product_id")
     try:
         product_uuid = UUID(str(product_id))
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="product_id khng h?p l?") from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="product_id không hợp lệ") from exc
 
     worker_action_value: int | None = None
     raw_action = payload.get("worker_action")
@@ -233,16 +277,26 @@ async def purchase_and_create(
         except (TypeError, ValueError) as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="worker_action ph?i l? s? nguyen",
+                detail="worker_action phải là số nguyên",
             ) from exc
     vm_type = str(payload.get("vm_type") or "").strip().lower()
     if worker_action_value is None and vm_type:
         mapping = {"linux": 1, "windows": 2, "win": 2, "dummy": 3, "test": 3}
         if vm_type not in mapping:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="vm_type khng h?p l?")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="vm_type không hợp lệ")
         worker_action_value = mapping[vm_type]
     if worker_action_value is not None and worker_action_value not in {1, 2, 3}:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="worker_action khng h?p l?")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="worker_action không hợp lệ")
+
+    # Allow specifying a specific worker_id
+    worker_id = payload.get("worker_id")
+    if worker_id:
+        try:
+            worker_uuid = UUID(str(worker_id))
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="worker_id không hợp lệ") from exc
+    else:
+        worker_uuid = None
 
     service = VpsService(db, event_bus)
     callback_base = str(settings.base_url)
@@ -253,6 +307,7 @@ async def purchase_and_create(
         worker_client=worker_client,
         callback_base=callback_base,
         worker_action=worker_action_value,
+        worker_id=worker_uuid,
     )
     data = {
         "session": _session_payload(session, include_stream=True, request=request),

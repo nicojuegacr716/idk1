@@ -36,6 +36,7 @@ class RegisterTokenRequest(BaseModel):
     password: str
     confirm: bool = Field(default=False)
     turnstile_token: str | None = Field(None, alias="turnstileToken")
+    worker_id: UUID | None = Field(None, alias="workerId")
 
 
 def _client_ip(request: Request) -> str:
@@ -192,6 +193,44 @@ async def get_wallet_balance(
     return {"balance": balance.balance}
 
 
+@router.get("/workers/available")
+async def get_available_workers(
+    db: Session = Depends(get_db),
+) -> Dict[str, list]:
+    registry = WorkerRegistryService(db)
+    workers: list[Worker] = registry.list_workers()
+    candidates = [w for w in workers if w.status == "active"]
+    
+    if not candidates:
+        return {"workers": []}
+    
+    client = WorkerClient()
+    result = []
+    
+    try:
+        for worker in candidates:
+            try:
+                tokens_left = await client.token_left(worker=worker)
+                result.append({
+                    "id": str(worker.id),
+                    "name": worker.name,
+                    "tokens_left": tokens_left,
+                    "available": tokens_left > 0
+                })
+            except HTTPException:
+                # Nếu không thể lấy thông tin token, vẫn hiển thị worker nhưng đánh dấu là không khả dụng
+                result.append({
+                    "id": str(worker.id),
+                    "name": worker.name,
+                    "tokens_left": -1,
+                    "available": False
+                })
+    finally:
+        await client.aclose()
+    
+    return {"workers": result}
+
+
 @router.post("/register-token")
 async def register_worker_token_for_coin(
     payload: RegisterTokenRequest,
@@ -212,24 +251,33 @@ async def register_worker_token_for_coin(
     candidates = [w for w in workers if w.status == "active"]
     if not candidates:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="no_worker_available")
-    client = WorkerClient()
-    worker_slots: list[tuple[Worker, int]] = []
-    for worker in candidates:
-        try:
-            total = await client.token_left(worker=worker)
-        except HTTPException:
-            total = -1
-        worker_slots.append((worker, total))
+    
+    # Nếu worker_id được chỉ định, sử dụng worker đó
     chosen: Worker | None = None
-    available = [(w, t) for w, t in worker_slots if t > 0]
-    unknown = [(w, t) for w, t in worker_slots if t == -1]
-
-    if available:
-        chosen = min(available, key=lambda x: x[1])[0]
-    elif unknown:
-        chosen = unknown[0][0]
+    if payload.worker_id:
+        chosen = next((w for w in candidates if w.id == payload.worker_id), None)
+        if not chosen:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="worker_not_found")
     else:
-        chosen = candidates[0]
+        # Nếu không có worker_id, chọn worker theo cách cũ
+        client = WorkerClient()
+        worker_slots: list[tuple[Worker, int]] = []
+        for worker in candidates:
+            try:
+                total = await client.token_left(worker=worker)
+            except HTTPException:
+                total = -1
+            worker_slots.append((worker, total))
+        
+        available = [(w, t) for w, t in worker_slots if t > 0]
+        unknown = [(w, t) for w, t in worker_slots if t == -1]
+
+        if available:
+            chosen = min(available, key=lambda x: x[1])[0]
+        elif unknown:
+            chosen = unknown[0][0]
+        else:
+            chosen = candidates[0]
     try:
         success = await client.add_worker_token(
             worker=chosen,
