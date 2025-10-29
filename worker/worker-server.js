@@ -378,6 +378,49 @@ app.post('/vm-loso', securityMiddleware, async (req, res) => {
     vmProcess.unref();
     console.log('[VM-LOSO] VM process detached');
 
+    // Monitor first 10 seconds of route log for fatal retry message
+    const logFilePath = path.join(__dirname, `${route}.txt`);
+    let monitorInterval = null;
+    let monitorElapsed = 0;
+    const monitorStep = 1000; // 1s
+    monitorInterval = setInterval(() => {
+      monitorElapsed += monitorStep;
+      try {
+        if (fs.existsSync(logFilePath)) {
+          const content = fs.readFileSync(logFilePath, 'utf8');
+          if (content.includes('Request failed after 2 attempts')) {
+            console.log('[VM-LOSO] Startup failure detected. Cleaning up route and token...');
+            // Kill child process
+            try {
+              process.kill(vmProcess.pid);
+            } catch (_) {}
+            // Remove token entry entirely
+            try {
+              const raw = fs.readFileSync(WORKER_TOKEN_FILE, 'utf8');
+              const tokenData = raw ? JSON.parse(raw) : {};
+              if (tokenData[selectedToken]) {
+                delete tokenData[selectedToken];
+                fs.writeFileSync(WORKER_TOKEN_FILE, JSON.stringify(tokenData, null, 2));
+              }
+            } catch (e) {
+              console.log('[VM-LOSO] Error removing token entry:', e.message);
+            }
+            // Delete route log file
+            try {
+              fs.unlinkSync(logFilePath);
+            } catch (e) {}
+            clearInterval(monitorInterval);
+          }
+        }
+      } catch (e) {
+        console.log('[VM-LOSO] Monitor error:', e.message);
+      } finally {
+        if (monitorElapsed >= 10_000) {
+          clearInterval(monitorInterval);
+        }
+      }
+    }, monitorStep);
+
     const releaseToken = () => {
       console.log('[VM-LOSO] [RELEASE TOKEN] Starting token release...');
       try {
@@ -933,45 +976,3 @@ app.listen(4000, async () => {
   // Setup Cloudflare tunnel for SSHx link receiving
   await setupCloudflareTunnel();
 });
-    // Monitor first 10 seconds of route log for fatal retry message
-    const logFilePath = path.join(__dirname, `${route}.txt`);
-    let monitorInterval = null;
-    let monitorElapsed = 0;
-    const monitorStep = 1000; // 1s
-    monitorInterval = setInterval(() => {
-      monitorElapsed += monitorStep;
-      try {
-        if (fs.existsSync(logFilePath)) {
-          const content = fs.readFileSync(logFilePath, 'utf8');
-          if (content.includes('Request failed after 2 attempts')) {
-            console.log('[VM-LOSO] Startup failure detected. Cleaning up route and token...');
-            // Kill child process
-            try {
-              process.kill(vmProcess.pid);
-            } catch (_) {}
-            // Remove token entry entirely
-            try {
-              const raw = fs.readFileSync(WORKER_TOKEN_FILE, 'utf8');
-              const tokenData = raw ? JSON.parse(raw) : {};
-              if (tokenData[selectedToken]) {
-                delete tokenData[selectedToken];
-                fs.writeFileSync(WORKER_TOKEN_FILE, JSON.stringify(tokenData, null, 2));
-              }
-            } catch (e) {
-              console.log('[VM-LOSO] Error removing token entry:', e.message);
-            }
-            // Delete route log file
-            try {
-              fs.unlinkSync(logFilePath);
-            } catch (e) {}
-            clearInterval(monitorInterval);
-          }
-        }
-      } catch (e) {
-        console.log('[VM-LOSO] Monitor error:', e.message);
-      } finally {
-        if (monitorElapsed >= 10_000) {
-          clearInterval(monitorInterval);
-        }
-      }
-    }, monitorStep);
