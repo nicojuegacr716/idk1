@@ -884,9 +884,17 @@ app.post('/stop/:route', securityMiddleware, async (req, res) => {
       cookie: `openedx-language-preference=en; sessionid=${usedToken}; edxloggedin=true; edx-user-info={"version": 1, "username": "nsnsnsnsnvnhh", "email": "thuonghai2711+hhjbvbjbay@gmail.com"}`
     };
 
-    await axios.post('https://learn.learn.nvidia.com/courses/course-v1:DLI+S-ES-01+V1/xblock/block-v1:DLI+S-ES-01+V1+type@nvidia-dli-platform-gpu-task-xblock+block@f373f5a2e27a42a78a61f699899d3904/handler/end_task', "{}", { headers });
-
-    console.log(`End task request sent for route ${route} with token ${usedToken}`);
+    try {
+      await axios.post(
+        'https://learn.learn.nvidia.com/courses/course-v1:DLI+S-ES-01+V1/xblock/block-v1:DLI+S-ES-01+V1+type@nvidia-dli-platform-gpu-task-xblock+block@f373f5a2e27a42a78a61f699899d3904/handler/end_task',
+        "{}",
+        { headers }
+      );
+      console.log(`End task request sent for route ${route} with token ${usedToken}`);
+    } catch (endErr) {
+      const status = endErr?.response?.status;
+      console.log(`End task request failed (${status ?? 'unknown'}). Proceeding to stop VM anyway.`);
+    }
 
     // Kill the VM process
     const { exec } = require('child_process');
@@ -936,7 +944,8 @@ app.post('/stop/:route', securityMiddleware, async (req, res) => {
 
   } catch (error) {
     console.error('Error stopping VM:', error.message);
-    res.status(500).json({ error: 'Failed to stop VM', details: error.message });
+    // Even if NVIDIA end_task fails, attempt best-effort cleanup
+    res.status(200).json({ success: false, error: 'stop_partial', details: error.message });
   }
 });
 
