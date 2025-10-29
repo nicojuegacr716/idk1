@@ -451,14 +451,14 @@ const isLaunchDisabled = !selectedProduct ||
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-3xl font-bold mb-2">Quản lý VPS</h1>
           <p className="text-muted-foreground">
             Khởi chạy, theo dõi và dừng các phiên VPS ở một nơi.
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setLauncherOpen(true)}>
+        <Button className="gap-2 w-full sm:w-auto" onClick={() => setLauncherOpen(true)}>
           <Plus className="w-4 h-4" />
           Tạo VPS
         </Button>
@@ -471,7 +471,7 @@ const isLaunchDisabled = !selectedProduct ||
             }
           }}
         >
-          <DialogContent className="glass-panel max-w-4xl">
+          <DialogContent className="glass-panel max-w-[95vw] sm:max-w-4xl">
             <DialogHeader>
               <DialogTitle>Chọn gói VPS</DialogTitle>
               <DialogDescription>Chọn cấu hình máy và hệ điều hành để bắt đầu.</DialogDescription>
@@ -484,7 +484,7 @@ const isLaunchDisabled = !selectedProduct ||
                   <p className="text-sm text-muted-foreground px-1">Hiện chưa có gói khả dụng.</p>
                 )}
                 {!productsLoading && products.length > 0 && (
-                  <div className="grid gap-4 md:grid-cols-3">
+                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
                     {products.map((product) => {
                       const isActive = selectedProduct?.id === product.id;
                       return (
@@ -574,7 +574,7 @@ const isLaunchDisabled = !selectedProduct ||
                     )}
                   </div>
                 )}
-                <div className="mt-3 grid gap-4 md:grid-cols-2">
+                <div className="mt-3 grid gap-4 grid-cols-1 md:grid-cols-2">
                   {VM_VARIANTS.map((variant) => {
                     const isSelected = selectedVariant === variant;
                     const disabled = !selectedProduct;
@@ -630,7 +630,7 @@ const isLaunchDisabled = !selectedProduct ||
                 </p>
               )}
             </div>
-            <DialogFooter className="flex justify-end gap-3">
+            <DialogFooter className="flex justify-end gap-3 flex-wrap">
               <Button
                 type="button"
                 variant="outline"
@@ -641,7 +641,7 @@ const isLaunchDisabled = !selectedProduct ||
               >
                 Hủy
               </Button>
-              <Button onClick={handleLaunch} disabled={isLaunchDisabled} className="gap-2">
+              <Button onClick={handleLaunch} disabled={isLaunchDisabled} className="gap-2 w-full sm:w-auto">
                 {createSession.isPending ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -880,12 +880,12 @@ const SessionCard = ({ session, onStop, isStopping }: SessionCardProps) => {
         </div>
       </CardContent>
       <Dialog open={showFullLog} onOpenChange={setShowFullLog}>
-        <DialogContent className="max-w-3xl space-y-4">
+        <DialogContent className="max-w-[95vw] sm:max-w-3xl space-y-4">
           <DialogHeader>
             <DialogTitle>Nhật ký hoạt động</DialogTitle>
             <DialogDescription>Toàn bộ nhật ký của phiên {session.worker_route ?? session.id}.</DialogDescription>
           </DialogHeader>
-          <div className="max-h-[70vh] overflow-y-auto rounded-md border border-border/40 bg-muted/20 p-4">
+          <div className="max-h-[75vh] overflow-y-auto rounded-md border border-border/40 bg-muted/20 p-4">
             {logQuery.isLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -1039,7 +1039,7 @@ const SessionLogPanel = ({ session, query, logText, onOpenFullLog }: SessionLogP
           </Button>
         </div>
       </div>
-      <ScrollArea className="h-[260px] rounded-md border border-border/40 bg-muted/20">
+      <ScrollArea className="max-h-[45vh] sm:h-[260px] rounded-md border border-border/40 bg-muted/20">
         <div className="p-4">{content}</div>
       </ScrollArea>
       <p className="text-[10px] text-muted-foreground">

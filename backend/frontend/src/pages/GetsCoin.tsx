@@ -202,7 +202,7 @@ const GetsCoin = () => {
                   </li>
                 </ol>
 
-                <div className="grid gap-4 text-left">
+                <div className="grid gap-4 text-left sm:grid-cols-1">
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium" htmlFor="gets-email">
                       Email đăng ký
@@ -241,7 +241,7 @@ const GetsCoin = () => {
                           <span>Đang tải danh sách worker...</span>
                         </div>
                       ) : workers.length > 0 ? (
-                        <div className="space-y-1.5 max-h-40 overflow-y-auto rounded-md border border-border/40 p-1">
+                        <div className="space-y-1.5 max-h-[45vh] sm:max-h-40 overflow-y-auto rounded-md border border-border/40 p-1">
                           {workers.map((worker) => (
                             <div
                               key={worker.id}
@@ -284,7 +284,7 @@ const GetsCoin = () => {
                 <div className="space-y-2">
                   <div
                     ref={captchaContainerRef}
-                    className="flex items-center justify-center"
+                    className="flex items-center justify-center min-h-[40px]"
                   />
                   {captchaError && (
                     <p className="text-xs text-destructive text-center">{captchaError}</p>
@@ -300,7 +300,7 @@ const GetsCoin = () => {
                 {message && (
                   <div className="flex items-center gap-2 text-sm text-destructive">
                     <AlertCircle className="h-4 w-4" />
-                    <span className="min-w-0 break-words">{message}</span>
+                    <span className="min-w-0 break-words whitespace-normal">{message}</span>
                   </div>
                 )}
 
