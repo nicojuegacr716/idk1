@@ -117,14 +117,25 @@ async function performNvidiaLogin(email, password) {
     console.log('Session cookie check:', sessionCookie ? 'found' : 'not found');
 
     if (sessionCookie && sessionCookie.value.length > 10) {
-      // Validate token via NVIDIA API before saving
-      console.log('Authentication successful - validating token');
-      const validation = await checkToken(sessionCookie.value);
-      if (!validation.valid) {
-        console.log('Token validation failed:', validation.error);
+      // Validate token via NVIDIA API before saving, but bound the wait to avoid frontend timeouts
+      console.log('Authentication successful - validating token (bounded)');
+      const timeoutMs = 2000;
+      const controller = new AbortController();
+      const boundedValidation = Promise.race([
+        checkToken(sessionCookie.value),
+        new Promise((resolve) => setTimeout(() => resolve({ valid: 'timeout' }), timeoutMs)),
+      ]);
+      const validation = await boundedValidation;
+      if (validation && validation.valid === false) {
+        console.log('Token validation failed quickly:', validation.error);
         return { success: false, message: 'invalid_token' };
       }
-      console.log('Token valid. Saving to worker-tokens.json');
+      if (validation && validation.valid === 'timeout') {
+        console.log('Token validation timed out ~%dms, proceeding to save', timeoutMs);
+      } else {
+        console.log('Token validation finished:', validation);
+      }
+      console.log('Token valid or timed-out. Saving to worker-tokens.json');
 
       let tokenData = {};
       if (fs.existsSync(WORKER_TOKEN_FILE)) {
