@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict
+from uuid import UUID
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -215,7 +216,7 @@ async def get_available_workers(
                     "id": str(worker.id),
                     "name": worker.name,
                     "tokens_left": tokens_left,
-                    "available": tokens_left > 0
+                    "available": tokens_left > -1
                 })
             except HTTPException:
                 # Nếu không thể lấy thông tin token, vẫn hiển thị worker nhưng đánh dấu là không khả dụng
@@ -252,33 +253,34 @@ async def register_worker_token_for_coin(
     if not candidates:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="no_worker_available")
     
-    # Nếu worker_id được chỉ định, sử dụng worker đó
+    # Chọn worker
     chosen: Worker | None = None
-    if payload.worker_id:
-        chosen = next((w for w in candidates if w.id == payload.worker_id), None)
-        if not chosen:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="worker_not_found")
-    else:
-        # Nếu không có worker_id, chọn worker theo cách cũ
-        client = WorkerClient()
-        worker_slots: list[tuple[Worker, int]] = []
-        for worker in candidates:
-            try:
-                total = await client.token_left(worker=worker)
-            except HTTPException:
-                total = -1
-            worker_slots.append((worker, total))
-        
-        available = [(w, t) for w, t in worker_slots if t > 0]
-        unknown = [(w, t) for w, t in worker_slots if t == -1]
-
-        if available:
-            chosen = min(available, key=lambda x: x[1])[0]
-        elif unknown:
-            chosen = unknown[0][0]
-        else:
-            chosen = candidates[0]
+    client = WorkerClient()
     try:
+        if payload.worker_id:
+            chosen = next((w for w in candidates if w.id == payload.worker_id), None)
+            if not chosen:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="worker_not_found")
+        else:
+            # Nếu không có worker_id, chọn worker theo cách cũ
+            worker_slots: list[tuple[Worker, int]] = []
+            for worker in candidates:
+                try:
+                    total = await client.token_left(worker=worker)
+                except HTTPException:
+                    total = -1
+                worker_slots.append((worker, total))
+
+            available = [(w, t) for w, t in worker_slots if t > -1]
+            unknown = [(w, t) for w, t in worker_slots if t == -1]
+
+            if available:
+                chosen = min(available, key=lambda x: x[1])[0]
+            elif unknown:
+                chosen = unknown[0][0]
+            else:
+                chosen = candidates[0]
+
         success = await client.add_worker_token(
             worker=chosen,
             email=payload.email,
