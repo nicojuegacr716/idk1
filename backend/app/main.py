@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import logging
 from pathlib import Path
@@ -143,8 +143,11 @@ def _preflight_headers(request: Request) -> tuple[dict[str, str], bool]:
     }
     should_vary = False
     if origin_allowed:
-        headers["Access-Control-Allow-Origin"] = "*" if allow_all else origin  # type: ignore[arg-type]
-        if not allow_all:
+        # Echo back the request origin when provided to support credentials.
+        # Even if allow_all is true, using the specific origin ensures browsers
+        # permit credentialed requests.
+        headers["Access-Control-Allow-Origin"] = origin or "*"  # type: ignore[arg-type]
+        if origin:
             headers["Access-Control-Allow-Credentials"] = "true"
             should_vary = True
     else:
