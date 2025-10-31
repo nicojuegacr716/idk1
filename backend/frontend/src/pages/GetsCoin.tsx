@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { fetchWalletBalance, registerWorkerTokenForCoin, fetchAdsAvailableWorkers } from "@/lib/api-client";
+import { fetchWalletBalance, registerWorkerTokenForCoin, fetchAdsAvailableWorkers, ApiError } from "@/lib/api-client";
 import type { WalletBalance } from "@/lib/types";
 import { useAuth } from "@/context/AuthContext";
 import { useTurnstile } from "@/hooks/useTurnstile";
@@ -130,24 +130,49 @@ const GetsCoin = () => {
     } catch (error: unknown) {
       setPhase("error");
       resetTurnstile();
+      if (error instanceof ApiError) {
+        const status = error.status;
+        const detail = (error.data as { detail?: string } | undefined)?.detail;
+        if (status === 401) {
+          setMessage("Vui lòng đăng nhập lại để tiếp tục.");
+          return;
+        }
+        if (status === 403 && detail === "turnstile_failed") {
+          setMessage("Xác thực Cloudflare Turnstile thất bại. Vui lòng thử lại.");
+          return;
+        }
+        if (status === 503 && detail === "turnstile_not_configured") {
+          setMessage("Captcha chưa được cấu hình trên máy chủ. Vui lòng báo quản trị viên.");
+          return;
+        }
+        if (status === 503 && detail === "turnstile_unreachable") {
+          setMessage("Không thể kết nối dịch vụ xác thực captcha. Vui lòng thử lại.");
+          return;
+        }
+        if (status === 400 && detail === "confirmation_required") {
+          setMessage("Bạn cần xác nhận đây không phải tài khoản chính của mình.");
+          return;
+        }
+        if (status === 409 && detail === "duplicate_mail") {
+          setMessage("Email này đã được đăng ký trước đó.");
+          return;
+        }
+        if (status === 503 && detail === "no_worker_available") {
+          setMessage("Tạm thời hết worker khả dụng. Vui lòng thử lại sau.");
+          return;
+        }
+        if (status === 502 && (detail === "worker_error" || detail === "worker_rejected")) {
+          setMessage("Worker gặp lỗi hoặc từ chối yêu cầu. Vui lòng thử lại.");
+          return;
+        }
+        setMessage(error.message || "Không thể xử lý yêu cầu. Vui lòng thử lại.");
+        return;
+      }
       if (error instanceof Error) {
         setMessage(error.message);
         return;
       }
-      if (typeof error === "object" && error !== null && "data" in error) {
-        const detail = (error as { data?: { detail?: string } }).data?.detail;
-        if (detail === "duplicate_mail") {
-          setMessage("Email này đã được đăng ký trước đó.");
-        } else if (detail === "no_worker_available" || detail === "no_tokens_available") {
-          setMessage("Tạm thời hết worker khả dụng. Vui lòng thử lại sau.");
-        } else if (detail) {
-          setMessage(detail);
-        } else {
-          setMessage("Không thể xử lý yêu cầu. Vui lòng thử lại.");
-        }
-      } else {
-        setMessage("Không thể xử lý yêu cầu. Vui lòng thử lại.");
-      }
+      setMessage("Không thể xử lý yêu cầu. Vui lòng thử lại.");
     }
   }, [email, password, confirmed, selectedWorkerId, workers, registerMutation, refresh, walletQuery, turnstileToken, resetTurnstile]);
 
@@ -241,7 +266,7 @@ const GetsCoin = () => {
                           <span>Đang tải danh sách worker...</span>
                         </div>
                       ) : workers.length > 0 ? (
-                        <div className="space-y-1.5 max-h-[45vh] sm:max-h-40 overflow-y-auto rounded-md border border-border/40 p-1">
+                        <div className="space-y-1.5 max-h-[60svh] sm:max-h-40 overflow-y-auto rounded-md border border-border/40 p-1">
                           {workers.map((worker) => (
                             <div
                               key={worker.id}
@@ -284,7 +309,7 @@ const GetsCoin = () => {
                 <div className="space-y-2">
                   <div
                     ref={captchaContainerRef}
-                    className="flex items-center justify-center min-h-[40px]"
+                    className="flex items-center justify-center min-h-[48px]"
                   />
                   {captchaError && (
                     <p className="text-xs text-destructive text-center">{captchaError}</p>

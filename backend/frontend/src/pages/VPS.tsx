@@ -1039,7 +1039,7 @@ const SessionLogPanel = ({ session, query, logText, onOpenFullLog }: SessionLogP
           </Button>
         </div>
       </div>
-      <ScrollArea className="max-h-[45vh] sm:h-[260px] rounded-md border border-border/40 bg-muted/20">
+      <ScrollArea className="max-h-[60svh] sm:max-h-[45vh] sm:h-[260px] rounded-md border border-border/40 bg-muted/20">
         <div className="p-4">{content}</div>
       </ScrollArea>
       <p className="text-[10px] text-muted-foreground">
