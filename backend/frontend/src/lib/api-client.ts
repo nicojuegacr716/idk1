@@ -581,6 +581,7 @@ type CreateVpsSessionParams = {
   idempotencyKey: string;
   workerAction?: number;
   turnstileToken?: string | null;
+  workerId?: string | null;
 };
 
 export const createVpsSession = async ({
@@ -589,6 +590,7 @@ export const createVpsSession = async ({
   idempotencyKey,
   workerAction,
   turnstileToken,
+  workerId,
 }: CreateVpsSessionParams): Promise<VpsSession> => {
   const payloadBody: Record<string, unknown> = {
     product_id: productId,
@@ -599,6 +601,9 @@ export const createVpsSession = async ({
   }
   if (turnstileToken) {
     payloadBody.turnstileToken = turnstileToken;
+  }
+  if (workerId) {
+    payloadBody.worker_id = workerId;
   }
   const payload = JSON.stringify(payloadBody);
   const headers = {

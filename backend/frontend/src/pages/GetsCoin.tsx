@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle2, Loader2, Link as LinkIcon } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, Link as LinkIcon, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,9 +22,7 @@ const GetsCoin = () => {
   const [copied, setCopied] = useState(false);
   const [phase, setPhase] = useState<RegisterPhase>("idle");
   const [message, setMessage] = useState<string | null>(null);
-  const [workers, setWorkers] = useState<any[]>([]);
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
-  const [loadingWorkers, setLoadingWorkers] = useState<boolean>(false);
   const {
     containerRef: captchaContainerRef,
     token: turnstileToken,
@@ -42,27 +40,45 @@ const GetsCoin = () => {
 
   const registerMutation = useMutation({ mutationFn: registerWorkerTokenForCoin });
 
-  useEffect(() => {
-    const fetchAvailableWorkers = async () => {
-      setLoadingWorkers(true);
-      try {
-        const data = await fetchAdsAvailableWorkers();
-        const list = Array.isArray(data?.workers) ? data.workers : [];
-        setWorkers(list);
-        if (list.length > 0) {
-          setSelectedWorkerId(list[0].id);
-        } else {
-          setSelectedWorkerId(null);
-        }
-      } catch (error) {
-        console.error('Error fetching workers:', error);
-      } finally {
-        setLoadingWorkers(false);
-      }
-    };
+  const {
+    data: availableWorkersResponse,
+    isLoading: workersLoading,
+    isFetching: workersFetching,
+    refetch: refetchWorkers,
+  } = useQuery({
+    queryKey: ["ads-available-workers"],
+    queryFn: fetchAdsAvailableWorkers,
+    staleTime: 20_000,
+    refetchInterval: 45_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
 
-    fetchAvailableWorkers();
-  }, []);
+  const workers = useMemo(
+    () => (Array.isArray(availableWorkersResponse?.workers) ? availableWorkersResponse?.workers ?? [] : []),
+    [availableWorkersResponse?.workers],
+  );
+
+  useEffect(() => {
+    if (!workers.length) {
+      setSelectedWorkerId(null);
+      return;
+    }
+    const alreadySelected = workers.some((worker) => worker.id === selectedWorkerId);
+    if (!alreadySelected) {
+      const firstAvailable = workers.find((worker) => worker.tokens_left > 0) ?? workers[0];
+      setSelectedWorkerId(firstAvailable.id);
+    }
+  }, [workers, selectedWorkerId]);
+
+  useEffect(() => {
+    if (!workers.length) return;
+    if (!workers.some((worker) => worker.tokens_left < 0)) return;
+    const timer = window.setTimeout(() => {
+      refetchWorkers();
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [workers, refetchWorkers]);
 
   const handleCopyLink = useCallback(async () => {
     try {
@@ -260,13 +276,34 @@ const GetsCoin = () => {
                       <label className="text-sm font-medium leading-none">
                         Chọn worker để gửi token:
                       </label>
-                      {loadingWorkers ? (
+                      {workers.length > 0 && (
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>{workers.length} worker khả dụng</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 gap-1 text-xs"
+                            onClick={() => refetchWorkers()}
+                            disabled={workersFetching}
+                          >
+                            {workersFetching ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-3.5 w-3.5" />
+                            )}
+                            <span className="hidden sm:inline">Kiểm tra lại</span>
+                            <span className="sm:hidden">Làm mới</span>
+                          </Button>
+                        </div>
+                      )}
+                      {workersLoading ? (
                         <div className="flex items-center space-x-2 text-sm text-muted-foreground">
                           <Loader2 className="h-4 w-4 animate-spin" />
                           <span>Đang tải danh sách worker...</span>
                         </div>
                       ) : workers.length > 0 ? (
-                        <div className="space-y-1.5 max-h-[60svh] sm:max-h-40 overflow-y-auto rounded-md border border-border/40 p-1">
+                        <div className="space-y-1.5 max-h-[60svh] sm:max-h-40 overflow-y-auto rounded-md border border-border/40 p-1 lt4c-scrollbar">
                           {workers.map((worker) => (
                             <div
                               key={worker.id}
@@ -281,19 +318,39 @@ const GetsCoin = () => {
                                 <div className={`w-2 h-2 rounded-full ${worker.tokens_left > 0 ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                 <span className="text-xs font-medium">{worker.name}</span>
                               </div>
-                              <span className="text-xs">
+                              <span className="text-xs flex items-center gap-1">
                                 {worker.tokens_left > 0
                                   ? `${worker.tokens_left} token khả dụng`
                                   : worker.tokens_left === -1
-                                    ? "Không thể kiểm tra"
+                                    ? (
+                                      <>
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                        Đang kiểm tra...
+                                      </>
+                                    )
                                     : "Hết token"}
                               </span>
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <div className="text-sm text-muted-foreground">
-                          Không có worker nào khả dụng
+                        <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+                          <span>Không có worker nào khả dụng</span>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="w-fit gap-2"
+                            onClick={() => refetchWorkers()}
+                            disabled={workersFetching}
+                          >
+                            {workersFetching ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-3.5 w-3.5" />
+                            )}
+                            Thử lại
+                          </Button>
                         </div>
                       )}
                     </div>

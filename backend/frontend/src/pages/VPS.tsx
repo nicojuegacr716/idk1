@@ -245,6 +245,7 @@ export default function VPS() {
   const {
     data: availability,
     isLoading: availabilityLoading,
+    isFetching: availabilityFetching,
     refetch: refetchAvailability,
   } = useQuery({
     queryKey: ["vps-availability", selectedProduct?.id],
@@ -252,6 +253,8 @@ export default function VPS() {
     enabled: !!selectedProduct,
     staleTime: 10_000,
     refetchInterval: 30_000, // Refetch every 30 seconds
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 
   const resetLauncherState = () => {
@@ -268,6 +271,35 @@ export default function VPS() {
     const defaultVariant = actionToVariant(normalizeAction(selectedProduct.provision_action));
     setSelectedVariant(defaultVariant);
   }, [selectedProduct]);
+
+  useEffect(() => {
+    const workers = availability?.workers ?? [];
+    if (workers.length === 0) {
+      setSelectedWorkerId(null);
+      return;
+    }
+    const current = selectedWorkerId ? workers.find((worker) => worker.id === selectedWorkerId) : undefined;
+    if (current && current.available) {
+      return;
+    }
+    const preferred = workers.find((worker) => worker.available && worker.tokens_left > 0);
+    if (preferred) {
+      setSelectedWorkerId(preferred.id);
+      return;
+    }
+    if (!current) {
+      setSelectedWorkerId(workers[0].id);
+    }
+  }, [availability?.workers, selectedWorkerId]);
+
+  useEffect(() => {
+    if (!availability?.workers?.length) return;
+    if (!availability.workers.some((worker) => worker.tokens_left < 0)) return;
+    const timer = window.setTimeout(() => {
+      refetchAvailability();
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [availability, refetchAvailability]);
 
   const visibleSessions = useMemo(
     () => sessions.filter((session) => session.status !== "deleted"),
@@ -305,13 +337,15 @@ const createSession = useMutation({
     mutationFn: ({
       variant,
       productId,
-    }: { variant: VmVariant; productId: string }) =>
+      workerId,
+    }: { variant: VmVariant; productId: string; workerId?: string | null }) =>
       createVpsSession({
         productId,
         vmType: variant,
         workerAction: VARIANT_ACTIONS[variant],
         idempotencyKey: idempotencyKey(),
         turnstileToken: vpsTurnstile.token ?? undefined,
+        workerId: workerId ?? undefined,
       }),
     onSuccess: (session) => {
       toast("Đã gửi yêu cầu khởi tạo.");
@@ -436,15 +470,17 @@ const createSession = useMutation({
     createSession.mutate({
       variant: selectedVariant,
       productId: selectedProduct.id,
-      workerId: selectedWorkerId,
+      workerId: selectedWorkerId ?? undefined,
     });
   };
 
   // Determine if launch button should be disabled
-const isLaunchDisabled = !selectedProduct ||
+  const isLaunchDisabled =
+    !selectedProduct ||
     !selectedVariant ||
     createSession.isPending ||
     availabilityLoading ||
+    availabilityFetching ||
     (availability && !availability.available) ||
     (vpsTurnstile.configured &&
       (!vpsTurnstile.token || Boolean(vpsTurnstile.error) || !vpsTurnstile.ready));
@@ -471,7 +507,7 @@ const isLaunchDisabled = !selectedProduct ||
             }
           }}
         >
-          <DialogContent className="glass-panel max-w-[95vw] max-h-[90vh] overflow-y-auto sm:max-w-4xl">
+          <DialogContent className="glass-panel max-w-[95vw] max-h-[90vh] overflow-y-auto sm:max-w-4xl lt4c-scrollbar">
             <DialogHeader>
               <DialogTitle className="text-lg sm:text-xl">Chọn gói VPS</DialogTitle>
               <DialogDescription className="text-sm">Chọn cấu hình máy và hệ điều hành để bắt đầu.</DialogDescription>
@@ -527,52 +563,74 @@ const isLaunchDisabled = !selectedProduct ||
                     : "Chọn gói ở trên để mở tùy chọn hệ điều hành."}
                 </p>
                 {selectedProduct && availability && (
-                  <div className="mt-2 p-2 sm:p-3 rounded-md border border-border/40 bg-muted/20">
-                    <div className="flex items-center gap-2 text-xs mb-2">
-                      <div className={`w-2 h-2 rounded-full ${availability.available ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                      <span className="font-medium">
-                        {availabilityLoading ? "Đang kiểm tra..." :
-                          availability.available
-                            ? "Có thể tạo VPS với các worker sau:"
-                            : "Không thể tạo VPS tại thời điểm này"
-                        }
-                      </span>
-                    </div>
-                    
-                    {availability.workers && availability.workers.length > 0 && (
-                      <div className="space-y-2 mt-2">
-                        <p className="text-xs font-medium">Chọn worker để tạo VPS:</p>
-                        <div className="space-y-1.5">
-                          {availability.workers.map((worker) => (
-                            <div 
-                              key={worker.id}
-                              className={`flex items-center justify-between p-2 sm:p-1.5 rounded-md border ${
-                                selectedWorkerId === worker.id 
-                                  ? 'border-primary bg-primary/5' 
-                                  : 'border-border/40 hover:border-primary/40 hover:bg-primary/5'
-                              } cursor-pointer transition-colors`}
-                              onClick={() => setSelectedWorkerId(worker.id)}
-                            >
-                              <div className="flex items-center gap-2">
-                                <div className={`w-2 h-2 rounded-full ${worker.available ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                                <span className="text-xs font-medium">{worker.name}</span>
-                              </div>
-                              <span className="text-xs">
-                                {worker.tokens_left > 0 
-                                  ? `${worker.tokens_left} token khả dụng` 
-                                  : worker.tokens_left === -1 
-                                    ? "Không thể kiểm tra" 
-                                    : "Hết token"}
-                              </span>
-                            </div>
-                          ))}
+                    <div className="mt-2 p-2 sm:p-3 rounded-md border border-border/40 bg-muted/20">
+                      <div className="flex items-center justify-between text-xs mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${availability.available ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                          <span className="font-medium">
+                            {availabilityLoading || availabilityFetching
+                              ? "Đang kiểm tra..."
+                              : availability.available
+                                ? "Có thể tạo VPS với các worker sau:"
+                                : "Không thể tạo VPS tại thời điểm này"}
+                          </span>
                         </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 gap-1 text-xs"
+                          onClick={() => refetchAvailability()}
+                          disabled={availabilityLoading || availabilityFetching}
+                        >
+                          {availabilityFetching ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-3.5 w-3.5" />
+                          )}
+                          Làm mới
+                        </Button>
                       </div>
-                    )}
-                    {availability.reason && !availability.available && (
-                      <p className="text-xs text-destructive mt-1">{availability.reason}</p>
-                    )}
-                  </div>
+
+                      {availability.workers && availability.workers.length > 0 && (
+                        <div className="space-y-2 mt-2">
+                          <p className="text-xs font-medium">Chọn worker để tạo VPS:</p>
+                          <div className="space-y-1.5 max-h-[45vh] overflow-y-auto rounded-md border border-border/40 p-1 lt4c-scrollbar">
+                            {availability.workers.map((worker) => (
+                              <div
+                                key={worker.id}
+                                className={`flex items-center justify-between p-2 sm:p-1.5 rounded-md border ${
+                                  selectedWorkerId === worker.id
+                                    ? 'border-primary bg-primary/5'
+                                    : 'border-border/40 hover:border-primary/40 hover:bg-primary/5'
+                                } cursor-pointer transition-colors`}
+                                onClick={() => setSelectedWorkerId(worker.id)}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-2 h-2 rounded-full ${worker.available ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                  <span className="text-xs font-medium">{worker.name}</span>
+                                </div>
+                                <span className="text-xs flex items-center gap-1">
+                                  {worker.tokens_left > 0
+                                    ? `${worker.tokens_left} token khả dụng`
+                                    : worker.tokens_left === -1
+                                      ? (
+                                        <>
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                          Đang kiểm tra...
+                                        </>
+                                      )
+                                      : "Hết token"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {availability.reason && !availability.available && (
+                        <p className="text-xs text-destructive mt-1">{availability.reason}</p>
+                      )}
+                    </div>
                 )}
                 <div className="mt-3 grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">
                   {VM_VARIANTS.map((variant) => {
@@ -1049,3 +1107,4 @@ const SessionLogPanel = ({ session, query, logText, onOpenFullLog }: SessionLogP
     </div>
   );
 };
+
