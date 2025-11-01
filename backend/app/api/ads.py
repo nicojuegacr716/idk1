@@ -288,7 +288,14 @@ async def register_worker_token_for_coin(
         )
     except HTTPException as exc:
         if exc.status_code == status.HTTP_409_CONFLICT:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="duplicate_mail")
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="duplicate_mail") from exc
+        if exc.status_code in {
+            status.HTTP_400_BAD_REQUEST,
+            status.HTTP_401_UNAUTHORIZED,
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+        }:
+            raise exc
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="worker_error") from exc
     finally:
         await client.aclose()
@@ -298,7 +305,7 @@ async def register_worker_token_for_coin(
     try:
         balance_info = wallet.adjust_balance(
             user,
-            15,
+            20,
             entry_type="earn.reg_account",
             ref_id=None,
             meta={"worker_id": str(chosen.id)},
@@ -307,7 +314,7 @@ async def register_worker_token_for_coin(
     except Exception:
         db.rollback()
         raise
-    return {"ok": True, "added": 15, "balance": balance_info.balance}
+    return {"ok": True, "added": 20, "balance": balance_info.balance}
 
 @router.get("/policy")
 async def get_ads_policy(

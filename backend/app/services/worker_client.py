@@ -193,7 +193,7 @@ class WorkerClient:
                 text = response.text.strip().lower()
                 if text == "true":
                     return True
-                raise HTTPException(status_code=502, detail="invalid_worker_response")
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="invalid_worker_response")
             if data is True:
                 return True
             if isinstance(data, str) and data.strip().lower() == "true":
@@ -201,16 +201,39 @@ class WorkerClient:
             if isinstance(data, dict) and data.get("success") is True:
                 return True
 
-            raise HTTPException(status_code=502, detail=f"unexpected_worker_response: {data}")
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"unexpected_worker_response: {data}")
+
+        # Parse structured error payloads from worker for better messaging
+        raw_error: str | None = None
+        payload_error: str | None = None
+        try:
+            parsed = response.json()
+            if isinstance(parsed, dict):
+                payload_error = (
+                    str(parsed.get("error"))
+                    or str(parsed.get("message"))
+                    or str(parsed.get("detail"))
+                )
+        except Exception:
+            raw_error = response.text.strip() or None
+        error_detail = payload_error or raw_error
+
         if response.status_code == status.HTTP_409_CONFLICT:
-            raise HTTPException(status_code=409, detail="duplicate_mail")
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error_detail or "duplicate_mail")
+        if response.status_code == status.HTTP_400_BAD_REQUEST:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_detail or "invalid_worker_request")
+        if response.status_code == status.HTTP_401_UNAUTHORIZED:
+            # Worker uses 401 for business rejections such as email verification requirements.
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_detail or "worker_auth_required")
+        if response.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=error_detail or "worker_rate_limited")
 
         try:
             response.raise_for_status()
         except httpx.HTTPError as exc:
             raise HTTPException(
-                status_code=502,
-                detail=f"worker_unreachable_or_failed: {str(exc)}",
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=error_detail or f"worker_unreachable_or_failed: {exc}",
             ) from exc
 
         return False

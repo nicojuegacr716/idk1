@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Tuple
@@ -16,6 +17,7 @@ from app.services.worker_client import WorkerClient
 from app.services.worker_selector import WorkerSelector
 
 CHECKLIST_TEMPLATE: List[Dict[str, object]] = []
+logger = logging.getLogger(__name__)
 
 
 class VpsService:
@@ -384,19 +386,37 @@ class VpsService:
             self.db.commit()
 
     async def stop_session(self, session: VpsSession, worker_client: WorkerClient) -> None:
+        stop_error: HTTPException | None = None
         if session.worker_id and session.worker_route:
             worker = self.db.get(Worker, session.worker_id)
             if worker:
                 try:
                     await worker_client.stop_vm(worker=worker, route=session.worker_route)
-                except HTTPException:
-                    raise
+                except HTTPException as exc:
+                    stop_error = exc
+                    logger.warning(
+                        "Worker stop returned HTTP error for session %s (worker %s): %s",
+                        session.id,
+                        worker.id,
+                        exc.detail,
+                    )
                 except Exception as exc:  # pragma: no cover - defensive
-                    raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Worker stop failed") from exc
+                    stop_error = HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail="worker_stop_failed",
+                    )
+                    logger.warning("Worker stop failed for session %s: %s", session.id, exc)
 
+        now = datetime.now(timezone.utc)
         session.status = "deleted"
-        session.expires_at = datetime.now(timezone.utc)
-        session.updated_at = datetime.now(timezone.utc)
+        session.expires_at = now
+        session.updated_at = now
+        session.worker_route = None
+        session.log_url = None
+        session.rdp_host = None
+        session.rdp_port = None
+        session.rdp_user = None
+        session.rdp_password = None
         self.db.add(session)
         self.db.commit()
 
@@ -407,6 +427,13 @@ class VpsService:
                     "event": "status.update",
                     "data": {"status": session.status},
                 },
+            )
+
+        if stop_error:
+            logger.warning(
+                "Session %s marked deleted despite worker stop failure: %s",
+                session.id,
+                stop_error.detail if isinstance(stop_error.detail, str) else stop_error.detail,
             )
 
     async def delete_session(self, session: VpsSession, worker_client: WorkerClient) -> None:

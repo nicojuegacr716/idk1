@@ -1300,7 +1300,7 @@ export const fetchAdminLogs = async (
   );
 };
 
-// Earn: Register worker token for coins (+15 on success)
+// Earn: Register worker token for coins (+20 on success)
 export const registerWorkerTokenForCoin = async (payload: {
   email: string;
   password: string;

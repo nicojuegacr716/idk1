@@ -136,7 +136,7 @@ const GetsCoin = () => {
 
       if (response?.ok) {
         setPhase("done");
-        setMessage("Hoàn tất! +15 xu đã được cộng vào ví của bạn.");
+        setMessage("Hoàn tất! +20 xu đã được cộng vào ví của bạn.");
         refresh();
         await walletQuery.refetch();
       } else {
@@ -177,6 +177,34 @@ const GetsCoin = () => {
           setMessage("Tạm thời hết worker khả dụng. Vui lòng thử lại sau.");
           return;
         }
+        if (status === 400 && detail === "need_email_verify") {
+          setMessage("Tài khoản NVIDIA yêu cầu xác minh email trước khi có thể sử dụng.");
+          return;
+        }
+        if (status === 400 && detail === "domain_not_supported") {
+          setMessage("Chỉ hỗ trợ email @gmail.com, @hotmail.com hoặc @outlook.com.");
+          return;
+        }
+        if (status === 400 && detail === "dottrick_not_allowed") {
+          setMessage("Email không được phép sử dụng dấu chấm hoặc dấu cộng cho domain này.");
+          return;
+        }
+        if (status === 400 && detail === "invalid_email") {
+          setMessage("Định dạng email không hợp lệ. Vui lòng kiểm tra lại.");
+          return;
+        }
+        if (status === 400 && detail === "worker_auth_required") {
+          setMessage("Worker từ chối đăng nhập. Vui lòng kiểm tra lại email/mật khẩu.");
+          return;
+        }
+        if (status === 400 && detail === "invalid_worker_request") {
+          setMessage("Worker không thể xử lý yêu cầu. Vui lòng kiểm tra thông tin và thử lại.");
+          return;
+        }
+        if (status === 503 && detail === "worker_rate_limited") {
+          setMessage("Worker đang bận xử lý quá nhiều yêu cầu. Vui lòng thử lại sau ít phút.");
+          return;
+        }
         if (status === 502 && (detail === "worker_error" || detail === "worker_rejected")) {
           setMessage("Worker gặp lỗi hoặc từ chối yêu cầu. Vui lòng thử lại.");
           return;
@@ -198,7 +226,7 @@ const GetsCoin = () => {
         <div className="flex flex-col gap-2 text-center">
           <h1 className="text-2xl sm:text-3xl font-bold">Gets Coin</h1>
           <p className="text-sm sm:text-base text-muted-foreground">
-            Tạo một tài khoản NVIDIA phụ để nhận nhanh +15 xu vào ví LifeTech4Cloud.
+            Tạo một tài khoản NVIDIA phụ để nhận nhanh +20 xu vào ví LifeTech4Cloud.
           </p>
           {walletQuery.data && (
             <p className="text-xs sm:text-sm text-muted-foreground">
