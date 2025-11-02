@@ -35,7 +35,7 @@ export function Footer() {
           <Code2 className="h-3.5 w-3.5 text-primary" />
           <span>Phiên bản: {versionLabel}</span>
         </div>
-
+        <iframe src="https://status.lt4c.io.vn/badge?theme=dark" width={250} height={30} style={{ border: "none", overflow: "hidden", colorScheme: "normal" }} className="ml-2" />
         {/* Góc phải */}
         <div className="flex items-center gap-1.5 sm:justify-end justify-center">
           <Activity className="h-3.5 w-3.5 text-primary" />
