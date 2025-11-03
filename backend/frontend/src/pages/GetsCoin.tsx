@@ -169,6 +169,10 @@ const GetsCoin = () => {
           setMessage("Bạn cần xác nhận đây không phải tài khoản chính của mình.");
           return;
         }
+        if (status === 400 && detail === "password_requirements") {
+          setMessage("Mật khẩu phải có chữ hoa, chữ thường, số và ký tự đặc biệt.");
+          return;
+        }
         if (status === 409 && detail === "duplicate_mail") {
           setMessage("Email này đã được đăng ký trước đó.");
           return;
@@ -264,7 +268,7 @@ const GetsCoin = () => {
                     )}
                   </li>
                   <li className="leading-relaxed">
-                    Bước 2: Tạo mới một tài khoản mà bạn không dùng cho mục đích khác (gmail/hotmail...).
+                    Bước 2: Tạo mới một tài khoản mà bạn không dùng cho mục đích khác (gmail/hotmail...), với username và mật khẩu phải gồm chữ hoa, chữ thường, số và ký tự đặc biệt.
                   </li>
                   <li className="leading-relaxed">
                     Bước 3: Điền thông tin tài khoản phụ vào form dưới đây và gửi cho hệ thống.

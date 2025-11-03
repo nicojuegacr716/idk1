@@ -86,6 +86,17 @@ def _collect_hints(request: Request, payload: PrepareRequest) -> Dict[str, str]:
 
 
 
+def _ensure_strong_password(password: str) -> None:
+    if not password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="password_requirements")
+    has_upper = any(char.isupper() for char in password)
+    has_lower = any(char.islower() for char in password)
+    has_digit = any(char.isdigit() for char in password)
+    has_special = any(not char.isalnum() for char in password)
+    if not (has_upper and has_lower and has_digit and has_special):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="password_requirements")
+
+
 def _ads_service(request: Request, db: Session, nonce_manager: AdsNonceManager) -> AdsService:
     redis_client = getattr(request.app.state, "redis", None)
     return AdsService(db, nonce_manager, redis_client=redis_client, settings=get_settings())
@@ -241,6 +252,7 @@ async def register_worker_token_for_coin(
 ) -> Dict[str, object]:
     if not payload.confirm:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="confirmation_required")
+    _ensure_strong_password(payload.password)
     await verify_turnstile_token(
         request=request,
         token=payload.turnstile_token,
