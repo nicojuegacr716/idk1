@@ -14,6 +14,7 @@ from fastapi.exception_handlers import http_exception_handler, request_validatio
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 try:
     from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 except ImportError:  # pragma: no cover - optional dependency
@@ -368,25 +369,50 @@ async def discord_callback(
     discord_id = profile_data["discord_id"]
     stmt = select(User).where(User.discord_id == discord_id)
     existing = db.execute(stmt).scalar_one_or_none()
-    if existing is None:
-        user = User(
-            discord_id=discord_id,
-            email=profile_data.get("email"),
-            username=profile_data.get("username") or f"discord-{discord_id}",
-            display_name=profile_data.get("display_name"),
-            avatar_url=profile_data.get("avatar_url"),
-            phone_number=None,
+
+    def _apply_profile_fields(target: User) -> None:
+        target.email = profile_data.get("email")
+        target.username = (
+            profile_data.get("username")
+            or target.username
+            or f"discord-{discord_id}"
         )
+        target.display_name = profile_data.get("display_name")
+        target.avatar_url = profile_data.get("avatar_url")
+        target.phone_number = None  # Discord OAuth never exposes phone numbers.
+
+    user: User
+    if existing is None:
+        user = User(discord_id=discord_id)
+        _apply_profile_fields(user)
         db.add(user)
     else:
         user = existing
-        user.email = profile_data.get("email")
-        user.username = profile_data.get("username") or user.username
-        user.display_name = profile_data.get("display_name")
-        user.avatar_url = profile_data.get("avatar_url")
-        user.phone_number = None  # Discord OAuth never exposes phone numbers.
+        _apply_profile_fields(user)
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        logger.warning(
+            "Discord login encountered IntegrityError for discord_id=%s; retrying fetch",
+            discord_id,
+            exc_info=exc,
+        )
+        user = db.execute(stmt).scalar_one_or_none()
+        if not user:
+            logger.error(
+                "Discord login could not recover user for discord_id=%s after IntegrityError",
+                discord_id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Unable to persist user profile.",
+            ) from exc
+        _apply_profile_fields(user)
+        db.add(user)
+        db.commit()
+
     db.refresh(user)
 
     # ensure base roles exist for authenticated user

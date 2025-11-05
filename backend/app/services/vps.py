@@ -12,7 +12,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import User, VpsProduct, VpsSession, Worker
+from app.models import LedgerEntry, User, VpsProduct, VpsSession, Worker
 from app.services.event_bus import SessionEventBus
 from app.services.wallet import WalletService
 from app.services.worker_client import WorkerClient
@@ -20,6 +20,7 @@ from app.services.worker_selector import WorkerSelector
 
 CHECKLIST_TEMPLATE: List[Dict[str, object]] = []
 AUTO_TERMINATE_STATUSES: tuple[str, ...] = ("pending", "provisioning", "ready")
+UNREACHABLE_REFUND_COINS = 15
 IP_PATTERN = re.compile(
     r"\bIP:\s*([0-9]{1,3}(?:\.[0-9]{1,3}){3}(?::[0-9]{1,5})?)",
     re.IGNORECASE,
@@ -540,11 +541,16 @@ class VpsService:
                 last_status = response.status_code
                 last_error = None
         await self.stop_session(session, worker_client)
+        self._reward_unreachable_session(session)
         detail_msg = "unknown error"
         if last_error:
             detail_msg = str(last_error)
         elif last_status is not None:
             detail_msg = f"HTTP {last_status}"
+        if last_error and last_status is None:
+            client_detail = "Session terminated because the remote IP is unreachable"
+        else:
+            client_detail = "Session terminated because the remote IP did not respond with content"
         logger.warning(
             "Connectivity post-check failed for session %s (target %s): %s",
             session.id,
@@ -553,8 +559,40 @@ class VpsService:
         )
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
-            detail="Session terminated because the remote IP did not respond with content",
+            detail=client_detail,
         )
+
+    def _reward_unreachable_session(self, session: VpsSession) -> None:
+        if not session.user_id:
+            return
+        user = self.db.get(User, session.user_id)
+        if not user:
+            return
+        existing = self.db.execute(
+            select(LedgerEntry.id)
+            .where(LedgerEntry.user_id == user.id)
+            .where(LedgerEntry.ref_id == session.id)
+            .where(LedgerEntry.type == "vps.auto_refund_unreachable")
+        ).scalar_one_or_none()
+        if existing:
+            return
+        wallet_service = WalletService(self.db)
+        try:
+            wallet_service.adjust_balance(
+                user,
+                UNREACHABLE_REFUND_COINS,
+                entry_type="vps.auto_refund_unreachable",
+                ref_id=session.id,
+                meta={"source": "unreachable_ip_check"},
+            )
+            self.db.commit()
+        except Exception as exc:  # pragma: no cover - defensive
+            self.db.rollback()
+            logger.warning(
+                "Failed to credit unreachable refund for session %s: %s",
+                session.id,
+                exc,
+            )
 
 
 __all__ = ["VpsService", "CHECKLIST_TEMPLATE"]

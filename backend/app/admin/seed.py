@@ -5,6 +5,7 @@ from typing import Dict, Iterable
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.models import User
 
@@ -231,7 +232,15 @@ def grant_role_to_user(db: Session, user: User, role_name: str) -> None:
     if is_admin_role and hasattr(user, "has_admin") and not getattr(user, "has_admin", False):
         user.has_admin = True
         db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        if is_admin_role and hasattr(user, "has_admin") and not getattr(user, "has_admin", False):
+            refreshed = db.get(User, user.id)
+            if refreshed is not None and getattr(refreshed, "has_admin", False):
+                user.has_admin = True
+        return
 
 
 def bootstrap_secret_valid(db: Session, secret: str) -> bool:
