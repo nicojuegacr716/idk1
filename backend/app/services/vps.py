@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import logging
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Tuple
 from uuid import UUID
 
+import httpx
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -17,6 +19,11 @@ from app.services.worker_client import WorkerClient
 from app.services.worker_selector import WorkerSelector
 
 CHECKLIST_TEMPLATE: List[Dict[str, object]] = []
+AUTO_TERMINATE_STATUSES: tuple[str, ...] = ("pending", "provisioning", "ready")
+IP_PATTERN = re.compile(
+    r"\bIP:\s*([0-9]{1,3}(?:\.[0-9]{1,3}){3}(?::[0-9]{1,5})?)",
+    re.IGNORECASE,
+)
 logger = logging.getLogger(__name__)
 
 
@@ -52,13 +59,10 @@ class VpsService:
             .order_by(VpsSession.created_at.desc())
         )
         sessions = list(self.db.scalars(stmt))
-        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
         filtered: List[VpsSession] = []
         for session in sessions:
-            if session.status == "deleted":
-                reference_ts = session.updated_at or session.created_at
-                if reference_ts and reference_ts < cutoff:
-                    continue
+            if session.status in {"deleted", "expired"}:
+                continue
             filtered.append(session)
         return filtered
 
@@ -83,7 +87,7 @@ class VpsService:
             idempotency_key=idempotency_key,
             created_at=now,
             updated_at=now,
-            expires_at=now + timedelta(days=30),
+            expires_at=now + timedelta(hours=5),
         )
         return session, session_token
 
@@ -446,11 +450,111 @@ class VpsService:
         if not worker:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Worker not found")
         try:
-            return await worker_client.fetch_log(worker=worker, route=session.worker_route)
+            log_text = await worker_client.fetch_log(worker=worker, route=session.worker_route)
         except HTTPException:
             raise
         except Exception as exc:  # pragma: no cover - defensive
             raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Unable to fetch log") from exc
+        await self._verify_remote_access(session=session, log_text=log_text, worker_client=worker_client)
+        return log_text
+
+    async def cleanup_expired_sessions(
+        self,
+        *,
+        max_age: timedelta,
+        worker_client: WorkerClient,
+    ) -> int:
+        cutoff = datetime.now(timezone.utc) - max_age
+        stmt = (
+            select(VpsSession)
+            .where(VpsSession.created_at < cutoff)
+            .where(VpsSession.status.in_(AUTO_TERMINATE_STATUSES))
+        )
+        sessions = list(self.db.scalars(stmt))
+        cleaned = 0
+        for session in sessions:
+            try:
+                await self.stop_session(session, worker_client)
+                cleaned += 1
+            except HTTPException as exc:
+                logger.warning(
+                    "Auto cleanup failed for session %s (HTTP %s): %s",
+                    session.id,
+                    exc.status_code,
+                    exc.detail,
+                )
+                self.db.rollback()
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Auto cleanup failed for session %s: %s", session.id, exc)
+                self.db.rollback()
+        return cleaned
+
+    async def _verify_remote_access(
+        self,
+        *,
+        session: VpsSession,
+        log_text: str,
+        worker_client: WorkerClient,
+    ) -> None:
+        if session.status in {"deleted", "expired"}:
+            return
+        match = IP_PATTERN.search(log_text or "")
+        if not match:
+            return
+        target = match.group(1).strip()
+        if not target:
+            return
+        host = target
+        port: str | None = None
+        if ":" in target:
+            host, port = target.rsplit(":", 1)
+        host = host.strip("[]")
+        port_int: int | None = None
+        if port:
+            try:
+                port_int = int(port)
+            except ValueError:
+                port_int = None
+            else:
+                if not (1 <= port_int <= 65535):
+                    port_int = None
+        candidate_urls: list[str] = []
+        if port_int:
+            candidate_urls.append(f"http://{host}:{port_int}")
+            candidate_urls.append(f"https://{host}:{port_int}")
+        else:
+            candidate_urls.append(f"http://{host}")
+            candidate_urls.append(f"https://{host}")
+        timeout = httpx.Timeout(5.0, connect=3.0, read=5.0, write=5.0)
+        last_error: Exception | None = None
+        last_status: int | None = None
+        async with httpx.AsyncClient(timeout=timeout, verify=False) as client:
+            for url in candidate_urls:
+                try:
+                    response = await client.post(url)
+                except Exception as exc:  # pragma: no cover - network dependent
+                    last_error = exc
+                    continue
+                if response.status_code < 400 and response.text.strip():
+                    return
+                last_status = response.status_code
+                last_error = None
+        await self.stop_session(session, worker_client)
+        detail_msg = "unknown error"
+        if last_error:
+            detail_msg = str(last_error)
+        elif last_status is not None:
+            detail_msg = f"HTTP {last_status}"
+        logger.warning(
+            "Connectivity post-check failed for session %s (target %s): %s",
+            session.id,
+            target,
+            detail_msg,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Session terminated because the remote IP did not respond with content",
+        )
 
 
 __all__ = ["VpsService", "CHECKLIST_TEMPLATE"]

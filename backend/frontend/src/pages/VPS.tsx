@@ -93,6 +93,20 @@ const normalizeAction = (raw: unknown): number | null => {
   return null;
 };
 
+const actionFromChecklist = (session: VpsSession): number | null => {
+  for (const item of session.checklist ?? []) {
+    const meta = item.meta;
+    if (meta && typeof meta === "object" && "worker_action" in meta) {
+      const actionValue = (meta as Record<string, unknown>).worker_action;
+      const normalized = normalizeAction(actionValue);
+      if (normalized !== null) {
+        return normalized;
+      }
+    }
+  }
+  return null;
+};
+
 const actionToVariant = (action: number | null | undefined): VmVariant | null => {
   switch (action) {
     case 1:
@@ -107,6 +121,7 @@ const actionToVariant = (action: number | null | undefined): VmVariant | null =>
 const resolveSessionVariant = (session: VpsSession): VmVariant | null => {
   const action =
     normalizeAction(session.worker_action) ??
+    actionFromChecklist(session) ??
     normalizeAction(session.provision_action) ??
     normalizeAction(session.product?.provision_action);
   return actionToVariant(action);

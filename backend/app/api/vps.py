@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List
 from uuid import UUID
 
@@ -76,7 +76,6 @@ def _session_payload(session: VpsSession, *, include_stream: bool = False, reque
             "provision_action": session.product.provision_action,
         }
         payload["provision_action"] = session.product.provision_action
-        payload["worker_action"] = session.product.provision_action
     elif session.product_id:
         payload["product"] = {"id": str(session.product_id)}
     if include_stream and request is not None:
@@ -94,6 +93,8 @@ def _session_payload(session: VpsSession, *, include_stream: bool = False, reque
                 except (TypeError, ValueError):
                     payload["worker_action"] = action_override
                 break
+    if payload["worker_action"] is None and payload["provision_action"] is not None:
+        payload["worker_action"] = payload["provision_action"]
     if session.status == "ready":
         payload["rdp"] = {
             "host": session.rdp_host,
@@ -248,8 +249,13 @@ async def list_sessions(
     request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    worker_client=Depends(get_worker_client),
 ) -> JSONResponse:
     service = VpsService(db)
+    await service.cleanup_expired_sessions(
+        max_age=timedelta(hours=5),
+        worker_client=worker_client,
+    )
     sessions = service.list_sessions_for_user(user)
     payload = [_session_payload(session, include_stream=True, request=request) for session in sessions]
     return JSONResponse({"sessions": payload})
@@ -378,6 +384,10 @@ async def get_session_log(
     worker_client=Depends(get_worker_client),
 ) -> PlainTextResponse:
     service = VpsService(db)
+    await service.cleanup_expired_sessions(
+        max_age=timedelta(hours=5),
+        worker_client=worker_client,
+    )
     session = service.get_session_for_user(session_id, user)
     log_text = await service.fetch_session_log(session, worker_client)
     return PlainTextResponse(log_text, status_code=status.HTTP_200_OK)
