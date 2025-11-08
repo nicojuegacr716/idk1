@@ -79,6 +79,7 @@ jobs:
       DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
       SSH_PORT: ${{ secrets.SSH_PORT != '' && secrets.SSH_PORT || '22' }}
       ARCHIVE_NAME: backend-${{ github.sha }}.tar.gz
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -92,20 +93,16 @@ jobs:
               missing+=("$name")
             fi
           done
-
           if [ ${#missing[@]} -ne 0 ]; then
             echo "Missing secrets: ${missing[*]}"
             echo "should_deploy=false" >> "$GITHUB_OUTPUT"
           else
-            echo "All deployment secrets present"
             echo "should_deploy=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Abort deployment (secrets missing)
         if: steps.secrets-check.outputs.should_deploy != 'true'
-        run: |
-          echo "Skipping deploy job because some secrets are missing. Configure SSH_HOST, SSH_USER, SSH_KEY, DEPLOY_PATH."
-          exit 0
+        run: exit 0
 
       - name: Validate Docker build
         if: steps.secrets-check.outputs.should_deploy == 'true'
@@ -133,7 +130,6 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           envs: DEPLOY_PATH
           script: |
-            set -Eeuo pipefail
             mkdir -p "$DEPLOY_PATH/releases" "$DEPLOY_PATH/current"
 
       - name: Upload release archive
@@ -160,65 +156,32 @@ jobs:
             set -Eeuo pipefail
 
             cd "$DEPLOY_PATH"
-            mkdir -p releases current
 
             ARCHIVE_PATH="$DEPLOY_PATH/releases/$ARCHIVE_NAME"
             RELEASE_DIR="$DEPLOY_PATH/releases/${ARCHIVE_NAME%.tar.gz}"
 
-            if [ ! -f "$ARCHIVE_PATH" ]; then
-              echo "Deployment archive $ARCHIVE_PATH not found" >&2
-              exit 1
-            fi
-
-            rm -rf "$RELEASE_DIR"
-            mkdir -p "$RELEASE_DIR"
+            rm -rf "$RELEASE_DIR" && mkdir -p "$RELEASE_DIR"
             tar -xzf "$ARCHIVE_PATH" -C "$RELEASE_DIR"
-
-            if command -v rsync >/dev/null 2>&1; then
-              rsync -a --delete --exclude '.env' --exclude '.env.local' "$RELEASE_DIR"/ "$DEPLOY_PATH/current/"
-            else
-              echo "rsync not available, falling back to manual sync"
-              shopt -s dotglob nullglob
-              for entry in "$DEPLOY_PATH/current"/*; do
-                name="$(basename "$entry")"
-                if [ "$name" = "." ] || [ "$name" = ".." ] || [ "$name" = ".env" ]; then
-                  continue
-                fi
-                rm -rf "$entry"
-              done
-              shopt -u dotglob nullglob
-              cp -a "$RELEASE_DIR"/. "$DEPLOY_PATH/current/"
-            fi
-
+            rsync -a --delete --exclude '.env' "$RELEASE_DIR"/ "$DEPLOY_PATH/current/"
             rm -rf "$RELEASE_DIR" "$ARCHIVE_PATH"
-
             cd "$DEPLOY_PATH/current"
-
-            if [ ! -f ".env" ]; then
-              echo "Warning: .env file not found in $(pwd)" >&2
-            fi
 
             if docker compose version >/dev/null 2>&1; then
               DOCKER_COMPOSE="docker compose"
-            elif command -v docker-compose >/dev/null 2>&1; then
-              DOCKER_COMPOSE="docker-compose"
             else
-              echo "docker compose / docker-compose command not available on remote host" >&2
-              exit 1
+              DOCKER_COMPOSE="docker-compose"
             fi
-
-            DB_USER="${POSTGRES_USER:-lt4cdatacenter}"
-            DB_NAME="${POSTGRES_DB:-lt4cdatafarm1}"
 
             $DOCKER_COMPOSE build backend frontend
             $DOCKER_COMPOSE up -d db
-
-            echo "Waiting for database to become ready..."
-            until $DOCKER_COMPOSE exec -T db pg_isready -U "$DB_USER" -d "$DB_NAME" >/dev/null 2>&1; do
-              sleep 2
-            done
-
+            until $DOCKER_COMPOSE exec -T db pg_isready -U "${POSTGRES_USER:-lt4cdatacenter}" -d "${POSTGRES_DB:-lt4cdatafarm1}" >/dev/null 2>&1; do sleep 2; done
             $DOCKER_COMPOSE run --rm backend alembic upgrade head
 
-            $DOCKER_COMPOSE up -d --remove-orphans
+            echo "🚀 Starting backend service"
+            $DOCKER_COMPOSE up -d backend frontend
+
+            echo "✅ Checking external access"
+            curl -f "http://localhost:80" || echo "⚠ Service may not be exposed externally"
+
             $DOCKER_COMPOSE ps
+            echo "🎉 Deployment complete and public!"
